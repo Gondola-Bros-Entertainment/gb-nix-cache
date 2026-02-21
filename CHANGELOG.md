@@ -2,7 +2,7 @@
 
 ## 0.1.0.0 — 2026-02-21
 
-- Initial release
+- Initial release (renamed from gb-nix-cache)
 - Nix-base32 encoding/decoding
 - SHA-256 hashing with Nix hash formatting
 - Store path parsing and rendering
