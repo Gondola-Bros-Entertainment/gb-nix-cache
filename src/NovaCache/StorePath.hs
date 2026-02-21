@@ -3,7 +3,7 @@
 -- A store path has the form @\/nix\/store\/\<hash\>-\<name\>@ where the hash
 -- is a 32-character nix-base32 string and the name contains only characters
 -- from a restricted set: alphanumeric plus @-._+?=@.
-module GBNix.StorePath
+module NovaCache.StorePath
   ( StoreDir (..),
     StorePath (..),
     StorePathHash (..),

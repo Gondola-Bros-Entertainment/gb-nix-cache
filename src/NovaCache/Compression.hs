@@ -2,7 +2,7 @@
 --
 -- Thin wrappers around the @lzma@ package, converting between strict
 -- 'ByteString' and the underlying lazy interface.
-module GBNix.Compression
+module NovaCache.Compression
   ( compressXz,
     decompressXz,
   )

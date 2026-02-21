@@ -8,14 +8,14 @@ import qualified Data.ByteString.Base64 as B64
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
-import qualified GBNix.Base32 as Base32
-import qualified GBNix.Compression as Compression
-import qualified GBNix.Hash as Hash
-import qualified GBNix.NAR as NAR
-import qualified GBNix.NarInfo as NarInfo
-import qualified GBNix.Signing as Signing
-import qualified GBNix.Store as Store
-import qualified GBNix.StorePath as StorePath
+import qualified NovaCache.Base32 as Base32
+import qualified NovaCache.Compression as Compression
+import qualified NovaCache.Hash as Hash
+import qualified NovaCache.NAR as NAR
+import qualified NovaCache.NarInfo as NarInfo
+import qualified NovaCache.Signing as Signing
+import qualified NovaCache.Store as Store
+import qualified NovaCache.StorePath as StorePath
 import System.Directory (createDirectoryIfMissing, removeDirectoryRecursive)
 import System.Exit (exitFailure, exitSuccess)
 import System.IO (hFlush, stdout)
@@ -111,7 +111,7 @@ runAll groups = do
 
 main :: IO ()
 main = do
-  putStrLn "gb-nix-cache test suite"
+  putStrLn "nova-cache test suite"
   putStrLn "======================"
   putStrLn ""
   runAll
@@ -562,7 +562,7 @@ testFileStore =
 -- | Create a temporary test directory.
 createTestDir :: IO FilePath
 createTestDir = do
-  let dir = "/tmp/gb-nix-cache-test"
+  let dir = "/tmp/nova-cache-test"
   createDirectoryIfMissing True dir
   pure dir
 

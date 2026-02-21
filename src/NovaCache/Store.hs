@@ -6,7 +6,7 @@
 -- \<root\>\/narinfo\/\<hash\>   -- narinfo files by store path hash
 -- \<root\>\/nar\/\<filename\>   -- compressed NAR files
 -- @
-module GBNix.Store
+module NovaCache.Store
   ( FileStore (..),
     newFileStore,
     readNarInfo,

@@ -1,12 +1,12 @@
 <div align="center">
-<h1>gb-nix-cache</h1>
+<h1>nova-cache</h1>
 <p><strong>Nix Binary Cache Protocol for Haskell</strong></p>
 <p>Pure-first implementation of the complete Nix binary cache protocol — base32, NAR, narinfo, Ed25519 signing, store paths — with an optional WAI server.</p>
 <p><a href="#quick-start">Quick Start</a> · <a href="#modules">Modules</a> · <a href="#server">Server</a> · <a href="#api-reference">API Reference</a></p>
 <p>
 
-[![CI](https://github.com/Gondola-Bros-Entertainment/gb-nix-cache/actions/workflows/ci.yml/badge.svg)](https://github.com/Gondola-Bros-Entertainment/gb-nix-cache/actions/workflows/ci.yml)
-[![Hackage](https://img.shields.io/hackage/v/gb-nix-cache.svg)](https://hackage.haskell.org/package/gb-nix-cache)
+[![CI](https://github.com/Novavero-AI/nova-cache/actions/workflows/ci.yml/badge.svg)](https://github.com/Novavero-AI/nova-cache/actions/workflows/ci.yml)
+[![Hackage](https://img.shields.io/hackage/v/nova-cache.svg)](https://hackage.haskell.org/package/nova-cache)
 ![Haskell](https://img.shields.io/badge/haskell-GHC%209.6-purple)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 
@@ -15,7 +15,7 @@
 
 ---
 
-## What is gb-nix-cache?
+## What is nova-cache?
 
 A focused, minimal library implementing the full Nix binary cache protocol:
 
@@ -38,13 +38,13 @@ Every module is pure by default. IO lives at the boundaries only.
 Add to your `.cabal` file:
 
 ```cabal
-build-depends: gb-nix-cache
+build-depends: nova-cache
 ```
 
 ### Hash a Store Path
 
 ```haskell
-import GBNix.Hash (hashBytes, formatNixHash)
+import NovaCache.Hash (hashBytes, formatNixHash)
 import qualified Data.ByteString as BS
 
 main :: IO ()
@@ -58,7 +58,7 @@ main = do
 ### Parse a NarInfo
 
 ```haskell
-import GBNix.NarInfo (parseNarInfo, niStorePath, niNarHash)
+import NovaCache.NarInfo (parseNarInfo, niStorePath, niNarHash)
 
 main :: IO ()
 main = do
@@ -80,7 +80,7 @@ main = do
 ### Sign and Verify
 
 ```haskell
-import GBNix.Signing (parseSecretKey, parsePublicKey, sign, verify)
+import NovaCache.Signing (parseSecretKey, parsePublicKey, sign, verify)
 
 main :: IO ()
 main = do
@@ -95,24 +95,24 @@ main = do
 
 ## Modules
 
-### GBNix.Base32
+### NovaCache.Base32
 
 Nix uses a non-standard base32 alphabet that omits `e`, `o`, `u`, `t` and encodes in reverse byte order. The encoder extracts 5-bit groups from descending positions; the decoder uses an O(n) ST-based bit scatter with mutable vectors.
 
 ```haskell
-import GBNix.Base32 (encode, decode)
+import NovaCache.Base32 (encode, decode)
 
 encode "\xff"       -- "8z"
 decode "0z"         -- Right "\x1e"
 decode (encode bs)  -- Right bs  (roundtrip)
 ```
 
-### GBNix.Hash
+### NovaCache.Hash
 
 SHA-256 via crypton, formatted as `sha256:<nix-base32>`:
 
 ```haskell
-import GBNix.Hash (hashBytes, hashFile, formatNixHash, parseNixHash)
+import NovaCache.Hash (hashBytes, hashFile, formatNixHash, parseNixHash)
 
 formatNixHash (hashBytes "hello")
 -- "sha256:0m6g5r7c..."
@@ -120,12 +120,12 @@ formatNixHash (hashBytes "hello")
 nixHash <- hashFile "/nix/store/abc123-hello"
 ```
 
-### GBNix.StorePath
+### NovaCache.StorePath
 
 Newtypes enforce invariants — store path hashes are always 32 characters, names are validated against the Nix character set:
 
 ```haskell
-import GBNix.StorePath
+import NovaCache.StorePath
 
 let Right sp = parseStorePath defaultStoreDir "/nix/store/abc123...-hello-1.0"
 storePathHashString sp  -- "abc123..."
@@ -133,12 +133,12 @@ storePathBaseName sp    -- "abc123...-hello-1.0"
 renderStorePath defaultStoreDir sp  -- "/nix/store/abc123...-hello-1.0"
 ```
 
-### GBNix.NAR
+### NovaCache.NAR
 
 The NAR tree ADT with `Builder`-based serialization:
 
 ```haskell
-import GBNix.NAR
+import NovaCache.NAR
 
 let entry = NarRegular False "file contents"
 let bytes = serialise entry
@@ -151,12 +151,12 @@ narHash entry  -- NixHash
 tree <- serialiseFromPath "/nix/store/abc123-hello"
 ```
 
-### GBNix.Signing
+### NovaCache.Signing
 
 Ed25519 signing and verification of narinfo fingerprints. Keys are `name:base64` pairs:
 
 ```haskell
-import GBNix.Signing
+import NovaCache.Signing
 
 -- Fingerprint format: 1;<StorePath>;<NarHash>;<NarSize>;<refs>
 fingerprint narinfo
@@ -171,13 +171,13 @@ Enable the WAI server with the `server` cabal flag:
 
 ```bash
 cabal build --flag server
-cabal run gb-nix-cache-server -- --port 5000 --store ./nix-cache
+cabal run nova-cache-server -- --port 5000 --store ./nix-cache
 ```
 
 Or via environment variables:
 
 ```bash
-PORT=5000 NIX_CACHE_DIR=./nix-cache gb-nix-cache-server
+PORT=5000 NIX_CACHE_DIR=./nix-cache nova-cache-server
 ```
 
 ### Endpoints
@@ -300,7 +300,7 @@ writeNar      :: FileStore -> Text -> ByteString -> IO ()
 getCacheInfo  :: FileStore -> (Text, Bool, Int)
 ```
 
-Full Haddock documentation is available on [Hackage](https://hackage.haskell.org/package/gb-nix-cache).
+Full Haddock documentation is available on [Hackage](https://hackage.haskell.org/package/nova-cache).
 
 ---
 
@@ -317,5 +317,5 @@ cabal haddock                            # Generate docs
 ---
 
 <p align="center">
-  <sub>MIT License · <a href="https://github.com/Gondola-Bros-Entertainment">Gondola Bros Entertainment</a></sub>
+  <sub>MIT License · <a href="https://github.com/Novavero-AI">Novavero AI</a></sub>
 </p>

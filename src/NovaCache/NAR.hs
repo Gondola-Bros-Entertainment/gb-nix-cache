@@ -11,7 +11,7 @@
 -- directory ::= (entry)*
 -- entry     ::= "entry" "(" "name" STRING "node" node ")"
 -- @
-module GBNix.NAR
+module NovaCache.NAR
   ( NarEntry (..),
     serialise,
     deserialise,
@@ -31,7 +31,7 @@ import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import Data.Word (Word64)
-import qualified GBNix.Hash as Hash
+import qualified NovaCache.Hash as Hash
 import System.Directory
   ( doesDirectoryExist,
     doesFileExist,

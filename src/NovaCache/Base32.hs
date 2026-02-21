@@ -3,7 +3,7 @@
 -- Nix uses a non-standard base32 alphabet that omits @e@, @o@, @u@, @t@,
 -- and encodes bytes in reverse order compared to RFC 4648. The encoding
 -- extracts 5-bit groups from the raw bytes in descending position order.
-module GBNix.Base32
+module NovaCache.Base32
   ( encode,
     decode,
   )

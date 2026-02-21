@@ -2,8 +2,8 @@
 --
 -- Nix represents content hashes as @sha256:\<nix-base32\>@. This module
 -- provides the bridge between raw cryptographic hashing and the Nix
--- string representation, composing 'Crypto.Hash' with 'GBNix.Base32'.
-module GBNix.Hash
+-- string representation, composing 'Crypto.Hash' with 'NovaCache.Base32'.
+module NovaCache.Hash
   ( NixHash (..),
     hashBytes,
     hashFile,
@@ -18,7 +18,7 @@ import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import Data.Text (Text)
 import qualified Data.Text as T
-import qualified GBNix.Base32 as Base32
+import qualified NovaCache.Base32 as Base32
 
 -- | A SHA-256 hash as raw bytes (always exactly 32 bytes).
 newtype NixHash = NixHash ByteString

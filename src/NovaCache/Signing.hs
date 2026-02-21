@@ -4,7 +4,7 @@
 -- @name:base64@ pairs. The fingerprint is a semicolon-delimited string:
 --
 -- @1;\<StorePath\>;\<NarHash\>;\<NarSize\>;\<comma-separated-refs\>@
-module GBNix.Signing
+module NovaCache.Signing
   ( SecretKey (..),
     PublicKey (..),
     parseSecretKey,
@@ -24,7 +24,7 @@ import qualified Data.ByteString.Base64 as B64
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
-import GBNix.NarInfo (NarInfo (..))
+import NovaCache.NarInfo (NarInfo (..))
 
 -- ---------------------------------------------------------------------------
 -- Types

@@ -18,7 +18,7 @@ jobs:
       - name: Set version from tag
         run: |
           TAG_VERSION=${GITHUB_REF#refs/tags/v}
-          sed -i "s/^version:.*/version:            $TAG_VERSION/" gb-nix-cache.cabal
+          sed -i "s/^version:.*/version:            $TAG_VERSION/" nova-cache.cabal
           echo "Set version to $TAG_VERSION"
       - uses: haskell-actions/setup@v2
         with:
@@ -27,7 +27,7 @@ jobs:
       - run: cabal sdist
       - name: Upload to Hackage
         run: |
-          SDIST=$(ls dist-newstyle/sdist/gb-nix-cache-*.tar.gz)
+          SDIST=$(ls dist-newstyle/sdist/nova-cache-*.tar.gz)
           curl --fail --silent --show-error \
             --header "Authorization: X-ApiKey ${HACKAGE_TOKEN}" \
             --form "package=@${SDIST}" \

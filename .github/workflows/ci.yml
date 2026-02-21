@@ -52,7 +52,7 @@ jobs:
           path: |
             ~/.cabal/store
             dist-newstyle
-          key: ${{ runner.os }}-ghc-9.6.7-${{ hashFiles('gb-nix-cache.cabal') }}
+          key: ${{ runner.os }}-ghc-9.6.7-${{ hashFiles('nova-cache.cabal') }}
           restore-keys: ${{ runner.os }}-ghc-9.6.7-
       - name: Install system dependencies
         run: sudo apt-get install -y liblzma-dev
@@ -74,7 +74,7 @@ jobs:
           path: |
             ~/.cabal/store
             dist-newstyle
-          key: ${{ runner.os }}-ghc-9.6.7-${{ hashFiles('gb-nix-cache.cabal') }}
+          key: ${{ runner.os }}-ghc-9.6.7-${{ hashFiles('nova-cache.cabal') }}
           restore-keys: ${{ runner.os }}-ghc-9.6.7-
       - name: Install system dependencies
         run: sudo apt-get install -y liblzma-dev
@@ -95,7 +95,7 @@ jobs:
           path: |
             ~/.cabal/store
             dist-newstyle
-          key: ${{ runner.os }}-ghc-9.6.7-${{ hashFiles('gb-nix-cache.cabal') }}
+          key: ${{ runner.os }}-ghc-9.6.7-${{ hashFiles('nova-cache.cabal') }}
           restore-keys: ${{ runner.os }}-ghc-9.6.7-
       - name: Install system dependencies
         run: sudo apt-get install -y liblzma-dev
@@ -131,12 +131,12 @@ jobs:
 
           ssh -i ~/.ssh/oci_key "ubuntu@${OCI_HOST}" "\
             source ~/.ghcup/env && \
-            cd ~/gb-nix-cache && \
+            cd ~/nova-cache && \
             git pull && \
             cabal build --flag server --ghc-options='-Wall -Werror' && \
-            BINARY=\$(cabal list-bin --flag server gb-nix-cache-server) && \
+            BINARY=\$(cabal list-bin --flag server nova-cache-server) && \
             sudo systemctl stop nix-cache.service && \
-            sudo cp \"\$BINARY\" /usr/local/bin/gb-nix-cache-server && \
-            sudo chmod +x /usr/local/bin/gb-nix-cache-server && \
+            sudo cp \"\$BINARY\" /usr/local/bin/nova-cache-server && \
+            sudo chmod +x /usr/local/bin/nova-cache-server && \
             sudo systemctl start nix-cache.service && \
             sudo systemctl status nix-cache.service --no-pager"

@@ -6,9 +6,9 @@ import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
-import GBNix.NarInfo (NarInfo (..), parseNarInfo, renderNarInfo)
-import GBNix.Signing (SecretKey, parseSecretKey, sign)
-import GBNix.Store (FileStore, getCacheInfo, newFileStore, readNar, readNarInfo, writeNar, writeNarInfo)
+import NovaCache.NarInfo (NarInfo (..), parseNarInfo, renderNarInfo)
+import NovaCache.Signing (SecretKey, parseSecretKey, sign)
+import NovaCache.Store (FileStore, getCacheInfo, newFileStore, readNar, readNarInfo, writeNar, writeNarInfo)
 import qualified Network.HTTP.Types as HTTP
 import Network.Wai (Application, Request, Response, ResponseReceived, pathInfo, requestHeaders, requestMethod, responseLBS, strictRequestBody)
 import qualified Network.Wai.Handler.Warp as Warp
@@ -74,7 +74,7 @@ main = do
             cfgSigningKey = sigKey
           }
 
-  putStrLn ("gb-nix-cache-server listening on port " ++ show port)
+  putStrLn ("nova-cache-server listening on port " ++ show port)
   putStrLn ("store root: " ++ storeRoot)
   putStrLn ("signing: " ++ maybe "disabled" (const "enabled") sigKey)
   putStrLn ("write auth: " ++ maybe "disabled (open writes!)" (const "enabled") (cfgApiKey cfg))

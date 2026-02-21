@@ -3,7 +3,7 @@
 -- A @.narinfo@ file is a simple @Key: Value@ text format describing a
 -- store path in a binary cache. The format supports multiple @Sig@ lines
 -- and optional fields for @Deriver@, @System@, and @CA@.
-module GBNix.NarInfo
+module NovaCache.NarInfo
   ( NarInfo (..),
     parseNarInfo,
     renderNarInfo,
