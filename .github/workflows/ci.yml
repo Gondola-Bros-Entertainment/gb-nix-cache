@@ -3,9 +3,9 @@ name: CI
 on:
   push:
     branches: [main]
-    tags: ['v*']
   pull_request:
     branches: [main]
+  workflow_call:
 
 jobs:
   lint:
@@ -109,34 +109,12 @@ jobs:
           cabal-version: '3.14'
       - run: cabal check
 
-  # ---------------------------------------------------------------------------
-  # Deploy server to OCI on push to main
-  # ---------------------------------------------------------------------------
   deploy-server:
     name: Deploy Server
     needs: [test, warnings]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: haskell-actions/setup@v2
-        with:
-          ghc-version: '9.6.7'
-          cabal-version: '3.14'
-      - uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cabal/store
-            dist-newstyle
-          key: ${{ runner.os }}-ghc-9.6.7-${{ hashFiles('gb-nix-cache.cabal') }}
-          restore-keys: ${{ runner.os }}-ghc-9.6.7-
-
-      - name: Install system dependencies
-        run: sudo apt-get install -y liblzma-dev
-
-      - name: Build server
-        run: cabal build --flag server --ghc-options="-Wall -Werror"
-
       - name: Deploy to OCI
         env:
           OCI_HOST: ${{ secrets.OCI_HOST }}
@@ -147,45 +125,13 @@ jobs:
           chmod 600 ~/.ssh/oci_key
           ssh-keyscan -H "$OCI_HOST" >> ~/.ssh/known_hosts 2>/dev/null
 
-          BINARY=$(cabal list-bin --flag server gb-nix-cache-server)
-          scp -i ~/.ssh/oci_key "$BINARY" "ubuntu@${OCI_HOST}:/tmp/gb-nix-cache-server"
           ssh -i ~/.ssh/oci_key "ubuntu@${OCI_HOST}" "\
-            sudo mv /tmp/gb-nix-cache-server /usr/local/bin/gb-nix-cache-server && \
+            source ~/.ghcup/env && \
+            cd ~/gb-nix-cache && \
+            git pull && \
+            cabal build --flag server --ghc-options='-Wall -Werror' && \
+            BINARY=\$(cabal list-bin --flag server gb-nix-cache-server) && \
+            sudo cp \"\$BINARY\" /usr/local/bin/gb-nix-cache-server && \
             sudo chmod +x /usr/local/bin/gb-nix-cache-server && \
             sudo systemctl restart nix-cache.service && \
             sudo systemctl status nix-cache.service --no-pager"
-
-  # ---------------------------------------------------------------------------
-  # Publish to Hackage on v* tags
-  # ---------------------------------------------------------------------------
-  publish-hackage:
-    name: Publish to Hackage
-    needs: [test, warnings, cabal-check]
-    if: startsWith(github.ref, 'refs/tags/v')
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: haskell-actions/setup@v2
-        with:
-          ghc-version: '9.6.7'
-          cabal-version: '3.14'
-
-      - name: Set version from tag
-        run: |
-          TAG="${GITHUB_REF#refs/tags/v}"
-          echo "VERSION=$TAG" >> "$GITHUB_ENV"
-          sed -i "s/^version:.*/version:            $TAG/" gb-nix-cache.cabal
-
-      - name: Build sdist
-        run: cabal sdist
-
-      - name: Upload to Hackage
-        env:
-          HACKAGE_TOKEN: ${{ secrets.HACKAGE_TOKEN }}
-        run: |
-          TARBALL=$(cabal sdist | tail -1)
-          curl -X PUT \
-            -H "Authorization: X-ApiKey $HACKAGE_TOKEN" \
-            -F "package=@$TARBALL" \
-            "https://hackage.haskell.org/packages/" \
-            --fail --silent --show-error
