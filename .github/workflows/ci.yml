@@ -50,6 +50,8 @@ jobs:
             dist-newstyle
           key: ${{ runner.os }}-ghc-9.6.7-${{ hashFiles('gb-nix-cache.cabal') }}
           restore-keys: ${{ runner.os }}-ghc-9.6.7-
+      - name: Install system dependencies
+        run: sudo apt-get install -y liblzma-dev
       - run: cabal build --only-dependencies
       - run: cabal build
 
@@ -70,6 +72,8 @@ jobs:
             dist-newstyle
           key: ${{ runner.os }}-ghc-9.6.7-${{ hashFiles('gb-nix-cache.cabal') }}
           restore-keys: ${{ runner.os }}-ghc-9.6.7-
+      - name: Install system dependencies
+        run: sudo apt-get install -y liblzma-dev
       - run: cabal test --enable-tests
 
   warnings:
@@ -89,6 +93,8 @@ jobs:
             dist-newstyle
           key: ${{ runner.os }}-ghc-9.6.7-${{ hashFiles('gb-nix-cache.cabal') }}
           restore-keys: ${{ runner.os }}-ghc-9.6.7-
+      - name: Install system dependencies
+        run: sudo apt-get install -y liblzma-dev
       - run: cabal build --ghc-options="-Wall -Werror"
 
   cabal-check:
@@ -125,7 +131,7 @@ jobs:
           key: ${{ runner.os }}-ghc-9.6.7-${{ hashFiles('gb-nix-cache.cabal') }}
           restore-keys: ${{ runner.os }}-ghc-9.6.7-
 
-      - name: Install lzma dev headers
+      - name: Install system dependencies
         run: sudo apt-get install -y liblzma-dev
 
       - name: Build server
