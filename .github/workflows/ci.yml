@@ -131,7 +131,8 @@ jobs:
             git pull && \
             cabal build --flag server --ghc-options='-Wall -Werror' && \
             BINARY=\$(cabal list-bin --flag server gb-nix-cache-server) && \
+            sudo systemctl stop nix-cache.service && \
             sudo cp \"\$BINARY\" /usr/local/bin/gb-nix-cache-server && \
             sudo chmod +x /usr/local/bin/gb-nix-cache-server && \
-            sudo systemctl restart nix-cache.service && \
+            sudo systemctl start nix-cache.service && \
             sudo systemctl status nix-cache.service --no-pager"
