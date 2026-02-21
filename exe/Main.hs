@@ -8,7 +8,7 @@ import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import GBNix.Store (FileStore, getCacheInfo, newFileStore, readNar, readNarInfo, writeNar, writeNarInfo)
 import qualified Network.HTTP.Types as HTTP
-import Network.Wai (Application, Request, pathInfo, requestMethod, responseLBS, strictRequestBody)
+import Network.Wai (Application, pathInfo, requestMethod, responseLBS, strictRequestBody)
 import qualified Network.Wai.Handler.Warp as Warp
 import System.Environment (getArgs, lookupEnv)
 
