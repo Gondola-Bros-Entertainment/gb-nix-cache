@@ -1,0 +1,185 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    name: HLint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: haskell-actions/hlint-setup@v2
+        with:
+          version: '3.8'
+      - uses: haskell-actions/hlint-run@v2
+        with:
+          path: '["src/", "test/", "exe/"]'
+          fail-on: warning
+
+  format:
+    name: Ormolu
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: haskell-actions/run-ormolu@v16
+        with:
+          pattern: |
+            src/**/*.hs
+            test/**/*.hs
+            exe/**/*.hs
+
+  build:
+    name: Build
+    needs: [lint, format]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: haskell-actions/setup@v2
+        with:
+          ghc-version: '9.6.7'
+          cabal-version: '3.14'
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cabal/store
+            dist-newstyle
+          key: ${{ runner.os }}-ghc-9.6.7-${{ hashFiles('gb-nix-cache.cabal') }}
+          restore-keys: ${{ runner.os }}-ghc-9.6.7-
+      - run: cabal build --only-dependencies
+      - run: cabal build
+
+  test:
+    name: Test
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: haskell-actions/setup@v2
+        with:
+          ghc-version: '9.6.7'
+          cabal-version: '3.14'
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cabal/store
+            dist-newstyle
+          key: ${{ runner.os }}-ghc-9.6.7-${{ hashFiles('gb-nix-cache.cabal') }}
+          restore-keys: ${{ runner.os }}-ghc-9.6.7-
+      - run: cabal test --enable-tests
+
+  warnings:
+    name: Warnings
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: haskell-actions/setup@v2
+        with:
+          ghc-version: '9.6.7'
+          cabal-version: '3.14'
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cabal/store
+            dist-newstyle
+          key: ${{ runner.os }}-ghc-9.6.7-${{ hashFiles('gb-nix-cache.cabal') }}
+          restore-keys: ${{ runner.os }}-ghc-9.6.7-
+      - run: cabal build --ghc-options="-Wall -Werror"
+
+  cabal-check:
+    name: Cabal Check
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: haskell-actions/setup@v2
+        with:
+          ghc-version: '9.6.7'
+          cabal-version: '3.14'
+      - run: cabal check
+
+  # ---------------------------------------------------------------------------
+  # Deploy server to OCI on push to main
+  # ---------------------------------------------------------------------------
+  deploy-server:
+    name: Deploy Server
+    needs: [test, warnings]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: haskell-actions/setup@v2
+        with:
+          ghc-version: '9.6.7'
+          cabal-version: '3.14'
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cabal/store
+            dist-newstyle
+          key: ${{ runner.os }}-ghc-9.6.7-${{ hashFiles('gb-nix-cache.cabal') }}
+          restore-keys: ${{ runner.os }}-ghc-9.6.7-
+
+      - name: Install lzma dev headers
+        run: sudo apt-get install -y liblzma-dev
+
+      - name: Build server
+        run: cabal build --flag server --ghc-options="-Wall -Werror"
+
+      - name: Deploy to OCI
+        env:
+          OCI_HOST: ${{ secrets.OCI_HOST }}
+          OCI_SSH_KEY: ${{ secrets.OCI_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$OCI_SSH_KEY" > ~/.ssh/oci_key
+          chmod 600 ~/.ssh/oci_key
+          ssh-keyscan -H "$OCI_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+
+          BINARY=$(cabal list-bin --flag server gb-nix-cache-server)
+          scp -i ~/.ssh/oci_key "$BINARY" "ubuntu@${OCI_HOST}:/tmp/gb-nix-cache-server"
+          ssh -i ~/.ssh/oci_key "ubuntu@${OCI_HOST}" "\
+            sudo mv /tmp/gb-nix-cache-server /usr/local/bin/gb-nix-cache-server && \
+            sudo chmod +x /usr/local/bin/gb-nix-cache-server && \
+            sudo systemctl restart nix-cache.service && \
+            sudo systemctl status nix-cache.service --no-pager"
+
+  # ---------------------------------------------------------------------------
+  # Publish to Hackage on v* tags
+  # ---------------------------------------------------------------------------
+  publish-hackage:
+    name: Publish to Hackage
+    needs: [test, warnings, cabal-check]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: haskell-actions/setup@v2
+        with:
+          ghc-version: '9.6.7'
+          cabal-version: '3.14'
+
+      - name: Set version from tag
+        run: |
+          TAG="${GITHUB_REF#refs/tags/v}"
+          echo "VERSION=$TAG" >> "$GITHUB_ENV"
+          sed -i "s/^version:.*/version:            $TAG/" gb-nix-cache.cabal
+
+      - name: Build sdist
+        run: cabal sdist
+
+      - name: Upload to Hackage
+        env:
+          HACKAGE_TOKEN: ${{ secrets.HACKAGE_TOKEN }}
+        run: |
+          TARBALL=$(cabal sdist | tail -1)
+          curl -X PUT \
+            -H "Authorization: X-ApiKey $HACKAGE_TOKEN" \
+            -F "package=@$TARBALL" \
+            "https://hackage.haskell.org/packages/" \
+            --fail --silent --show-error
