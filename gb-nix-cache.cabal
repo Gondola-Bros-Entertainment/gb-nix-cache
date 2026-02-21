@@ -19,6 +19,7 @@ build-type:         Simple
 tested-with:        GHC == 9.6.7
 extra-doc-files:
     CHANGELOG.md
+    README.md
 
 flag server
   description: Build the cache server executable (pulls in warp/wai)
