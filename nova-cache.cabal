@@ -1,11 +1,12 @@
 cabal-version:      3.0
 name:               nova-cache
-version:            0.1.0.0
+version:            0.2.0.0
 synopsis:           Pure Nix binary cache protocol library
 description:
   A focused, minimal, pure-first library implementing the full Nix binary
   cache protocol — nix-base32, NAR serialization, narinfo parsing, Ed25519
-  signing, store path handling — with an optional WAI server.
+  signing, store path handling, content validation — with an optional WAI
+  server.
 
 license:            MIT
 license-file:       LICENSE
@@ -36,6 +37,7 @@ library
     NovaCache.Signing
     NovaCache.Store
     NovaCache.StorePath
+    NovaCache.Validate
 
   build-depends:
       base                >= 4.16 && < 5

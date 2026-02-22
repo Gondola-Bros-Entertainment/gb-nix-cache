@@ -16,6 +16,7 @@ import qualified NovaCache.NarInfo as NarInfo
 import qualified NovaCache.Signing as Signing
 import qualified NovaCache.Store as Store
 import qualified NovaCache.StorePath as StorePath
+import qualified NovaCache.Validate as Validate
 import System.Directory (createDirectoryIfMissing, removeDirectoryRecursive)
 import System.Exit (exitFailure, exitSuccess)
 import System.IO (hFlush, stdout)
@@ -122,7 +123,8 @@ main = do
       testNarInfo,
       testSigning,
       testCompression,
-      testFileStore
+      testFileStore,
+      testValidate
     ]
 
 -- ---------------------------------------------------------------------------
@@ -569,6 +571,175 @@ testFileStore =
         result <- Store.readNarInfo store "../../etc/passwd"
         removeDirectoryRecursive tmpDir
         assertEqual "blocked" Nothing result
+    ]
+
+-- ---------------------------------------------------------------------------
+-- Validate tests
+-- ---------------------------------------------------------------------------
+
+-- | Bytes whose SHA-256 is used as the NarHash in 'mkValidNarInfo'.
+validNarBytes :: ByteString
+validNarBytes = BS.pack [1, 2, 3, 4, 5]
+
+-- | Bytes whose SHA-256 is used as the FileHash in 'mkValidNarInfo'.
+validFileBytes :: ByteString
+validFileBytes = BS.pack [10, 20, 30, 40, 50]
+
+-- | A narinfo that passes all field validation.
+mkValidNarInfo :: NarInfo.NarInfo
+mkValidNarInfo =
+  NarInfo.NarInfo
+    { NarInfo.niStorePath = "/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-hello-1.0",
+      NarInfo.niUrl = "nar/test.nar.xz",
+      NarInfo.niCompression = "xz",
+      NarInfo.niFileHash = Hash.formatNixHash (Hash.hashBytes validFileBytes),
+      NarInfo.niFileSize = 5,
+      NarInfo.niNarHash = Hash.formatNixHash (Hash.hashBytes validNarBytes),
+      NarInfo.niNarSize = 5,
+      NarInfo.niReferences = ["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-hello-1.0"],
+      NarInfo.niDeriver = Nothing,
+      NarInfo.niSystem = Nothing,
+      NarInfo.niSigs = [],
+      NarInfo.niCA = Nothing
+    }
+
+testValidate :: IO Bool
+testValidate =
+  runGroup
+    "Validate"
+    [ test "validateNarInfo valid" $
+        assertEqual
+          "valid narinfo"
+          (Right mkValidNarInfo)
+          (Validate.validateNarInfo mkValidNarInfo),
+      test "validateNarInfo negative FileSize" $
+        let ni = mkValidNarInfo {NarInfo.niFileSize = -1}
+         in assertEqual
+              "negative filesize"
+              (Left [Validate.NegativeFileSize (-1)])
+              (Validate.validateNarInfo ni),
+      test "validateNarInfo negative NarSize" $
+        let ni = mkValidNarInfo {NarInfo.niNarSize = -1}
+         in assertEqual
+              "negative narsize"
+              (Left [Validate.NegativeNarSize (-1)])
+              (Validate.validateNarInfo ni),
+      test "validateNarInfo bad StorePath" $
+        let ni = mkValidNarInfo {NarInfo.niStorePath = "not-a-store-path"}
+         in case Validate.validateNarInfo ni of
+              Left [Validate.InvalidStorePath raw _] ->
+                assertEqual "raw value" "not-a-store-path" raw
+              other -> do
+                putStrLn ("    expected Left [InvalidStorePath ..], got: " ++ show other)
+                pure False,
+      test "validateNarInfo bad FileHash" $
+        let ni = mkValidNarInfo {NarInfo.niFileHash = "md5:bogus"}
+         in case Validate.validateNarInfo ni of
+              Left [Validate.InvalidFileHash raw _] ->
+                assertEqual "raw value" "md5:bogus" raw
+              other -> do
+                putStrLn ("    expected Left [InvalidFileHash ..], got: " ++ show other)
+                pure False,
+      test "validateNarInfo bad NarHash" $
+        let ni = mkValidNarInfo {NarInfo.niNarHash = "md5:bogus"}
+         in case Validate.validateNarInfo ni of
+              Left [Validate.InvalidNarHash raw _] ->
+                assertEqual "raw value" "md5:bogus" raw
+              other -> do
+                putStrLn ("    expected Left [InvalidNarHash ..], got: " ++ show other)
+                pure False,
+      test "validateNarInfo bad reference" $
+        let ni = mkValidNarInfo {NarInfo.niReferences = ["bad"]}
+         in case Validate.validateNarInfo ni of
+              Left [Validate.InvalidReference raw _] ->
+                assertEqual "raw value" "bad" raw
+              other -> do
+                putStrLn ("    expected Left [InvalidReference ..], got: " ++ show other)
+                pure False,
+      test "validateNarInfo multiple errors collected" $
+        let ni =
+              mkValidNarInfo
+                { NarInfo.niFileSize = -1,
+                  NarInfo.niNarSize = -1,
+                  NarInfo.niStorePath = "bad"
+                }
+         in case Validate.validateNarInfo ni of
+              Left errs -> assertTrue "at least 3 errors" (length errs >= 3)
+              Right _ -> do
+                putStrLn "    expected Left, got Right"
+                pure False,
+      test "validateNarHash correct" $
+        assertEqual
+          "correct nar hash"
+          (Right ())
+          (Validate.validateNarHash mkValidNarInfo validNarBytes),
+      test "validateNarHash wrong" $
+        case Validate.validateNarHash mkValidNarInfo (BS.pack [99]) of
+          Left (Validate.NarHashMismatch _ _) -> pure True
+          other -> do
+            putStrLn ("    expected Left NarHashMismatch, got: " ++ show other)
+            pure False,
+      test "validateFileHash correct" $
+        assertEqual
+          "correct file hash"
+          (Right ())
+          (Validate.validateFileHash mkValidNarInfo validFileBytes),
+      test "validateFileHash wrong" $
+        case Validate.validateFileHash mkValidNarInfo (BS.pack [99]) of
+          Left (Validate.FileHashMismatch _ _) -> pure True
+          other -> do
+            putStrLn ("    expected Left FileHashMismatch, got: " ++ show other)
+            pure False,
+      test "validateSignature valid" $ do
+        sk <- generateTestSecretKey
+        let pk = deriveTestPublicKey sk
+            ni = mkValidNarInfo
+        case Signing.sign sk ni of
+          Left err -> do
+            putStrLn ("  sign failed: " ++ err)
+            pure False
+          Right sig ->
+            let niSigned = ni {NarInfo.niSigs = [sig]}
+             in assertEqual "valid sig" (Right ()) (Validate.validateSignature pk niSigned),
+      test "validateSignature invalid" $ do
+        sk <- generateTestSecretKey
+        let pk = deriveTestPublicKey sk
+            bogusSig = "bogus-key:aW52YWxpZA=="
+            ni = mkValidNarInfo {NarInfo.niSigs = [bogusSig]}
+        assertEqual
+          "invalid sig"
+          (Left [Validate.SignatureInvalid bogusSig])
+          (Validate.validateSignature pk ni),
+      test "validateSignature no sigs" $ do
+        sk <- generateTestSecretKey
+        let pk = deriveTestPublicKey sk
+        assertEqual
+          "no sigs"
+          (Left [Validate.NoSignatures])
+          (Validate.validateSignature pk mkValidNarInfo),
+      test "validateFull all good" $ do
+        sk <- generateTestSecretKey
+        let pk = deriveTestPublicKey sk
+            ni = mkValidNarInfo
+        case Signing.sign sk ni of
+          Left err -> do
+            putStrLn ("  sign failed: " ++ err)
+            pure False
+          Right sig ->
+            let niSigned = ni {NarInfo.niSigs = [sig]}
+             in assertEqual
+                  "full valid"
+                  (Right ())
+                  (Validate.validateFull pk niSigned validNarBytes validFileBytes),
+      test "validateFull multiple failures" $ do
+        sk <- generateTestSecretKey
+        let pk = deriveTestPublicKey sk
+            ni = mkValidNarInfo {NarInfo.niFileSize = -1, NarInfo.niNarSize = -1}
+        case Validate.validateFull pk ni (BS.pack [99]) (BS.pack [99]) of
+          Left errs -> assertTrue "at least 4 errors" (length errs >= 4)
+          Right _ -> do
+            putStrLn "    expected Left, got Right"
+            pure False
     ]
 
 -- ---------------------------------------------------------------------------

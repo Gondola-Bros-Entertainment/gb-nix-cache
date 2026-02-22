@@ -27,6 +27,7 @@ A focused, minimal library implementing the full Nix binary cache protocol:
 - **Signing** — Ed25519 fingerprint signing and verification for binary cache trust
 - **Compression** — xz compress/decompress for NAR transport
 - **Store** — Filesystem storage backend for narinfo and NAR files
+- **Validate** — Pure protocol validation: field semantics, content hashes, Ed25519 signatures — all errors collected, not short-circuited
 - **Server** — Optional WAI/Warp HTTP server implementing the cache protocol (behind `server` cabal flag)
 
 Every module is pure by default. IO lives at the boundaries only.
@@ -89,6 +90,26 @@ main = do
   case sign sk narinfo of
     Left err  -> putStrLn ("Sign error: " ++ err)
     Right sig -> putStrLn ("Verified: " <> show (verify pk narinfo sig))
+```
+
+### Validate an Upload
+
+```haskell
+import NovaCache.Validate (validateFull, ValidationError)
+import NovaCache.Signing (parsePublicKey)
+
+-- Pure validation — no IO needed
+validateUpload :: PublicKey -> NarInfo -> ByteString -> ByteString -> IO ()
+validateUpload pk narinfo narBytes fileBytes =
+  case validateFull pk narinfo narBytes fileBytes of
+    Right ()   -> putStrLn "Upload valid"
+    Left errs  -> mapM_ (putStrLn . ("  " ++) . show) errs
+
+-- Individual checks compose too
+import NovaCache.Validate (validateNarInfo, validateNarHash)
+
+checkNarInfo :: NarInfo -> Either [ValidationError] NarInfo
+checkNarInfo = validateNarInfo  -- collects ALL errors, not just the first
 ```
 
 ---
@@ -163,6 +184,27 @@ fingerprint narinfo
 -- "1;/nix/store/abc...;sha256:...;5678;"
 ```
 
+### NovaCache.Validate
+
+Pure protocol validation — field semantics, content hashes, and signatures. All validators collect every error instead of short-circuiting:
+
+```haskell
+import NovaCache.Validate
+
+-- Validate narinfo fields (sizes, store path, hash formats, references)
+case validateNarInfo narinfo of
+  Right ni   -> processUpload ni
+  Left errs  -> rejectWith errs  -- [InvalidStorePath ..., NegativeFileSize ...]
+
+-- Verify content hashes match declared values
+validateNarHash narinfo rawNarBytes       -- Either ValidationError ()
+validateFileHash narinfo compressedBytes  -- Either ValidationError ()
+
+-- Full pipeline: fields + nar hash + file hash + signatures
+validateFull publicKey narinfo narBytes fileBytes
+-- Either [ValidationError] ()
+```
+
 ---
 
 ## Server
@@ -211,8 +253,8 @@ nix build --substituters http://cache.example.com --trusted-public-keys "mykey:b
   │  Base32 ──→ Hash ──→ StorePath           │
   │                         │                │
   │                      NarInfo ──→ Signing │
-  │                         │                │
-  │                        NAR               │
+  │                         │         │      │
+  │                        NAR    Validate   │
   │                                          │
   └──────────────────────────────────────────┘
                        │
@@ -222,8 +264,8 @@ nix build --substituters http://cache.example.com --trusted-public-keys "mykey:b
   └──────────────────────────────────────────┘
 ```
 
-- **8 modules**, 6 pure + 2 at the IO boundary
-- **48 tests**, hand-rolled harness, no framework dependencies
+- **9 modules**, 7 pure + 2 at the IO boundary
+- **74 tests**, hand-rolled harness, no framework dependencies
 - **Zero partial functions** — total by construction
 - **Strict by default** — bang patterns on all data fields
 
@@ -282,6 +324,16 @@ sign           :: SecretKey -> NarInfo -> Either String Text
 verify         :: PublicKey -> NarInfo -> Text -> Bool
 ```
 
+### Validate
+
+```haskell
+validateNarInfo  :: NarInfo -> Either [ValidationError] NarInfo
+validateNarHash  :: NarInfo -> ByteString -> Either ValidationError ()
+validateFileHash :: NarInfo -> ByteString -> Either ValidationError ()
+validateSignature :: PublicKey -> NarInfo -> Either [ValidationError] ()
+validateFull     :: PublicKey -> NarInfo -> ByteString -> ByteString -> Either [ValidationError] ()
+```
+
 ### Compression
 
 ```haskell
@@ -329,7 +381,7 @@ The action resolves Nix store path closures, exports them to a local binary cach
 
 ```bash
 cabal build                              # Build library
-cabal test                               # Run all tests (48 tests, 8 groups)
+cabal test                               # Run all tests (74 tests, 9 groups)
 cabal build --ghc-options="-Werror"      # Warnings as errors
 cabal build --flag server                # Build with WAI server
 cabal haddock                            # Generate docs
