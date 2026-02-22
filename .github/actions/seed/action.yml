@@ -104,15 +104,53 @@ runs:
           echo "::warning::Some uploads failed. Cache may be partially seeded."
         fi
 
-        # Validate: round-trip a random narinfo to confirm the cache is serving correctly
+        # Validate: round-trip a random narinfo + its NAR to confirm the cache
+        # is storing, signing, and serving correctly.  The server appends its own
+        # Ed25519 signature on upload, so we compare fields rather than raw bytes.
         if [ "$UPLOADED" -gt 0 ]; then
           SAMPLE=$(ls "$PUSH_DIR"/*.narinfo | shuf -n 1 || head -1)
           SAMPLE_HASH=$(basename "$SAMPLE" .narinfo)
           FETCHED=$(curl -sf "$CACHE_URL/$SAMPLE_HASH.narinfo" || true)
-          LOCAL=$(cat "$SAMPLE")
-          if [ -n "$FETCHED" ] && [ "$FETCHED" = "$LOCAL" ]; then
-            echo "Validation passed: $SAMPLE_HASH.narinfo round-trips correctly"
-          else
-            echo "::warning::Validation failed: $SAMPLE_HASH.narinfo content mismatch or not retrievable"
+
+          PASS=true
+
+          # 1. Narinfo is reachable
+          if [ -z "$FETCHED" ]; then
+            echo "::warning::Validation: $SAMPLE_HASH.narinfo not retrievable from cache"
+            PASS=false
+          fi
+
+          # 2. StorePath matches (correct content)
+          if [ "$PASS" = true ]; then
+            LOCAL_SP=$(grep -m1 '^StorePath:' "$SAMPLE" || true)
+            FETCHED_SP=$(echo "$FETCHED" | grep -m1 '^StorePath:' || true)
+            if [ "$LOCAL_SP" != "$FETCHED_SP" ]; then
+              echo "::warning::Validation: StorePath mismatch — expected '$LOCAL_SP', got '$FETCHED_SP'"
+              PASS=false
+            fi
+          fi
+
+          # 3. Server signature present (signing is operational)
+          if [ "$PASS" = true ]; then
+            if ! echo "$FETCHED" | grep -q '^Sig:'; then
+              echo "::warning::Validation: $SAMPLE_HASH.narinfo has no Sig: line — server signing may be disabled"
+              PASS=false
+            fi
+          fi
+
+          # 4. Corresponding NAR is fetchable
+          if [ "$PASS" = true ]; then
+            NAR_URL=$(echo "$FETCHED" | grep -m1 '^URL:' | sed 's/^URL: *//')
+            if [ -n "$NAR_URL" ]; then
+              NAR_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$CACHE_URL/$NAR_URL") || true
+              if [ "$NAR_STATUS" != "200" ]; then
+                echo "::warning::Validation: NAR fetch returned HTTP $NAR_STATUS for $NAR_URL"
+                PASS=false
+              fi
+            fi
+          fi
+
+          if [ "$PASS" = true ]; then
+            echo "Validation passed: $SAMPLE_HASH.narinfo — content, signature, and NAR all verified"
           fi
         fi

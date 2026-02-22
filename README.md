@@ -232,7 +232,27 @@ PORT=5000 NIX_CACHE_DIR=./nix-cache nova-cache-server
 | `PUT` | `/<hash>.narinfo` | Upload narinfo |
 | `PUT` | `/nar/<file>` | Upload NAR file |
 
-### Use as a Nix Substituter
+### Public Binary Cache
+
+A free, public binary cache is available at `cache.novavero.ai`. Add it to
+your Nix configuration:
+
+```nix
+# nix.conf or /etc/nix/nix.conf
+extra-substituters = https://cache.novavero.ai
+extra-trusted-public-keys = cache.novavero.ai-1:2yJK0UZWlDDTpThzEdqfGWaj+j3ljOCGoA50Ims47dM=
+```
+
+Or use it directly:
+
+```bash
+nix build --substituters "https://cache.nixos.org https://cache.novavero.ai" \
+          --trusted-public-keys "cache.nixos.org-1:DLD/YGKmo6OceLp6RsiGCbi5FwMExRzJcoJKanMPe/Q= cache.novavero.ai-1:2yJK0UZWlDDTpThzEdqfGWaj+j3ljOCGoA50Ims47dM="
+```
+
+### Self-Hosted Cache
+
+Run your own instance:
 
 ```bash
 # Push to your cache

@@ -53,8 +53,10 @@ narSubdir :: String
 narSubdir = "nar"
 
 -- | Default cache priority (lower = preferred by Nix).
+-- Community caches should use a higher number than cache.nixos.org (40)
+-- so the official cache is preferred and we serve as a fallback.
 defaultPriority :: Int
-defaultPriority = 30
+defaultPriority = 50
 
 -- | Default Nix store directory.
 defaultStoreDir :: Text

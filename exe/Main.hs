@@ -12,6 +12,7 @@ import qualified Network.Wai.Handler.Warp as Warp
 import NovaCache.NarInfo (NarInfo (..), parseNarInfo, renderNarInfo)
 import NovaCache.Signing (SecretKey, parseSecretKey, sign)
 import NovaCache.Store (FileStore, getCacheInfo, newFileStore, readNar, readNarInfo, writeNar, writeNarInfo)
+import NovaCache.Validate (validateNarInfo)
 import System.Environment (getArgs, lookupEnv)
 import Text.Read (readMaybe)
 
@@ -119,14 +120,21 @@ app cfg req respond = case (requestMethod req, pathInfo req) of
         respond (responseLBS HTTP.status200 octetHeaders (BL.fromStrict content))
       Nothing ->
         respond (responseLBS HTTP.status404 textHeaders "not found")
-  -- PUT /<hash>.narinfo (auth required)
+  -- PUT /<hash>.narinfo (auth required, validated)
   ("PUT", [hashNarinfo])
     | Just hashKey <- T.stripSuffix ".narinfo" hashNarinfo ->
         requireAuth cfg req respond $ do
           body <- BL.toStrict <$> strictRequestBody req
-          let signed = signNarInfo (cfgSigningKey cfg) body
-          writeNarInfo (cfgStore cfg) hashKey signed
-          respond (responseLBS HTTP.status200 textHeaders "ok")
+          case parseNarInfo (TE.decodeUtf8 body) of
+            Left err ->
+              respond (badRequest (T.pack err))
+            Right ni -> case validateNarInfo ni of
+              Left errs ->
+                respond (badRequest (T.unlines (map (T.pack . show) errs)))
+              Right _ -> do
+                let signed = signNarInfo (cfgSigningKey cfg) body
+                writeNarInfo (cfgStore cfg) hashKey signed
+                respond (responseLBS HTTP.status200 textHeaders "ok")
   -- PUT /nar/<file> (auth required)
   ("PUT", ["nar", fileName]) ->
     requireAuth cfg req respond $ do
@@ -189,14 +197,29 @@ boolText :: Bool -> Text
 boolText True = "1"
 boolText False = "0"
 
+-- | 400 Bad Request with a text error message.
+badRequest :: Text -> Response
+badRequest msg = responseLBS HTTP.status400 textHeaders (BL.fromStrict (TE.encodeUtf8 msg))
+
 -- | Content-Type: text/plain headers.
 textHeaders :: HTTP.ResponseHeaders
 textHeaders = [(HTTP.hContentType, "text/plain")]
 
 -- | Content-Type: application/x-nix-narinfo headers.
+-- Narinfo files are content-addressed (keyed by store path hash) and
+-- immutable once written, so they are safe to cache indefinitely at the
+-- CDN edge.
 narInfoHeaders :: HTTP.ResponseHeaders
-narInfoHeaders = [(HTTP.hContentType, "text/x-nix-narinfo")]
+narInfoHeaders =
+  [ (HTTP.hContentType, "text/x-nix-narinfo"),
+    (HTTP.hCacheControl, "public, max-age=31536000, immutable")
+  ]
 
 -- | Content-Type: application/octet-stream headers.
+-- NAR files are content-addressed (keyed by content hash) and immutable
+-- once written, so they are safe to cache indefinitely at the CDN edge.
 octetHeaders :: HTTP.ResponseHeaders
-octetHeaders = [(HTTP.hContentType, "application/octet-stream")]
+octetHeaders =
+  [ (HTTP.hContentType, "application/octet-stream"),
+    (HTTP.hCacheControl, "public, max-age=31536000, immutable")
+  ]

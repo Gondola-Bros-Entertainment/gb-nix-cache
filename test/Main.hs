@@ -553,7 +553,7 @@ testFileStore =
         removeDirectoryRecursive tmpDir
         ok1 <- assertEqual "storeDir" "/nix/store" storeDir
         ok2 <- assertTrue "wantMassQuery" wantMass
-        ok3 <- assertEqual "priority" 30 priority
+        ok3 <- assertEqual "priority" 50 priority
         pure (ok1 && ok2 && ok3),
       test "sanitizePath rejects traversal" $
         assertEqual "dotdot" Nothing (Store.sanitizePath ".."),

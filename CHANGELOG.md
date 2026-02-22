@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.2.1.0 — 2026-02-22
+
+- Server: `validateNarInfo` wired into PUT handler — rejects malformed uploads
+  with 400 Bad Request and collected validation errors
+- Server: `Cache-Control: public, max-age=31536000, immutable` on narinfo and
+  NAR GET responses for CDN edge caching
+- Store: default priority changed from 30 to 50 (community cache fallback
+  behind cache.nixos.org at 40)
+- Seed action: fix round-trip validation to account for server-side signing;
+  now verifies StorePath field, signature presence, and NAR fetchability
+- Public binary cache documented with key and nix.conf instructions
+
 ## 0.2.0.0 — 2026-02-22
 
 - New module: `NovaCache.Validate` — pure protocol validation layer
