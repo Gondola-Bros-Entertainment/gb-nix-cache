@@ -552,7 +552,23 @@ testFileStore =
         ok1 <- assertEqual "storeDir" "/nix/store" storeDir
         ok2 <- assertTrue "wantMassQuery" wantMass
         ok3 <- assertEqual "priority" 30 priority
-        pure (ok1 && ok2 && ok3)
+        pure (ok1 && ok2 && ok3),
+      test "sanitizePath rejects traversal" $
+        assertEqual "dotdot" Nothing (Store.sanitizePath ".."),
+      test "sanitizePath rejects slash" $
+        assertEqual "slash" Nothing (Store.sanitizePath "../../etc/passwd"),
+      test "sanitizePath rejects backslash" $
+        assertEqual "backslash" Nothing (Store.sanitizePath "..\\..\\etc\\passwd"),
+      test "sanitizePath rejects empty" $
+        assertEqual "empty" Nothing (Store.sanitizePath ""),
+      test "sanitizePath accepts valid hash" $
+        assertEqual "valid" (Just "abc123def456") (Store.sanitizePath "abc123def456"),
+      test "read rejects traversal" $ do
+        tmpDir <- createTestDir
+        store <- Store.newFileStore tmpDir
+        result <- Store.readNarInfo store "../../etc/passwd"
+        removeDirectoryRecursive tmpDir
+        assertEqual "blocked" Nothing result
     ]
 
 -- ---------------------------------------------------------------------------

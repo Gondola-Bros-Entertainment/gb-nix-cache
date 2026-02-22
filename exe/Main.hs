@@ -13,6 +13,7 @@ import NovaCache.NarInfo (NarInfo (..), parseNarInfo, renderNarInfo)
 import NovaCache.Signing (SecretKey, parseSecretKey, sign)
 import NovaCache.Store (FileStore, getCacheInfo, newFileStore, readNar, readNarInfo, writeNar, writeNarInfo)
 import System.Environment (getArgs, lookupEnv)
+import Text.Read (readMaybe)
 
 -- ---------------------------------------------------------------------------
 -- Constants
@@ -58,8 +59,8 @@ main = do
   sigKeyPath <- lookupEnv signingKeyEnvVar
 
   let port = case args of
-        ("--port" : p : _) -> read p
-        _ -> maybe defaultPort read portEnv
+        ("--port" : p : _) -> fromMaybe defaultPort (readMaybe p)
+        _ -> maybe defaultPort (fromMaybe defaultPort . readMaybe) portEnv
       storeRoot = case args of
         ("--store" : s : _) -> s
         _ -> fromMaybe defaultStoreRoot storeEnv

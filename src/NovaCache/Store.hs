@@ -14,6 +14,7 @@ module NovaCache.Store
     readNar,
     writeNar,
     getCacheInfo,
+    sanitizePath,
   )
 where
 
@@ -82,28 +83,40 @@ newFileStore root = do
 -- ---------------------------------------------------------------------------
 
 -- | Read a narinfo by its store path hash. Returns 'Nothing' if absent.
+--
+-- Returns 'Nothing' for path components containing traversal sequences.
 readNarInfo :: FileStore -> Text -> IO (Maybe ByteString)
-readNarInfo fs hashKey =
-  readIfExists (fsRoot fs </> narinfoSubdir </> T.unpack hashKey)
+readNarInfo fs hashKey = case sanitizePath hashKey of
+  Nothing -> pure Nothing
+  Just safe -> readIfExists (fsRoot fs </> narinfoSubdir </> safe)
 
 -- | Write a narinfo by its store path hash.
+--
+-- Silently rejects path components containing traversal sequences.
 writeNarInfo :: FileStore -> Text -> ByteString -> IO ()
-writeNarInfo fs hashKey =
-  BS.writeFile (fsRoot fs </> narinfoSubdir </> T.unpack hashKey)
+writeNarInfo fs hashKey body = case sanitizePath hashKey of
+  Nothing -> pure ()
+  Just safe -> BS.writeFile (fsRoot fs </> narinfoSubdir </> safe) body
 
 -- ---------------------------------------------------------------------------
 -- NAR operations
 -- ---------------------------------------------------------------------------
 
 -- | Read a NAR file by its filename. Returns 'Nothing' if absent.
+--
+-- Returns 'Nothing' for path components containing traversal sequences.
 readNar :: FileStore -> Text -> IO (Maybe ByteString)
-readNar fs fileName =
-  readIfExists (fsRoot fs </> narSubdir </> T.unpack fileName)
+readNar fs fileName = case sanitizePath fileName of
+  Nothing -> pure Nothing
+  Just safe -> readIfExists (fsRoot fs </> narSubdir </> safe)
 
 -- | Write a NAR file by its filename.
+--
+-- Silently rejects path components containing traversal sequences.
 writeNar :: FileStore -> Text -> ByteString -> IO ()
-writeNar fs fileName =
-  BS.writeFile (fsRoot fs </> narSubdir </> T.unpack fileName)
+writeNar fs fileName body = case sanitizePath fileName of
+  Nothing -> pure ()
+  Just safe -> BS.writeFile (fsRoot fs </> narSubdir </> safe) body
 
 -- ---------------------------------------------------------------------------
 -- Cache metadata
@@ -112,6 +125,24 @@ writeNar fs fileName =
 -- | Cache metadata: (storeDir, wantMassQuery, priority).
 getCacheInfo :: FileStore -> (Text, Bool, Int)
 getCacheInfo fs = (fsStoreDir fs, True, fsPriority fs)
+
+-- ---------------------------------------------------------------------------
+-- Path sanitization
+-- ---------------------------------------------------------------------------
+
+-- | Validate a path component for safe filesystem use.
+--
+-- Rejects components containing directory separators (@\/@, @\\@),
+-- traversal sequences (@..@), or empty strings. Returns 'Just' the
+-- sanitized 'FilePath' on success, 'Nothing' on rejection.
+sanitizePath :: Text -> Maybe FilePath
+sanitizePath txt
+  | T.null txt = Nothing
+  | T.any isPathSeparator txt = Nothing
+  | txt == ".." = Nothing
+  | otherwise = Just (T.unpack txt)
+  where
+    isPathSeparator c = c == '/' || c == '\\'
 
 -- ---------------------------------------------------------------------------
 -- Internal
