@@ -72,6 +72,9 @@ runs:
             UPLOADED=$((UPLOADED + 1))
           else
             FAILED=$((FAILED + 1))
+            if [ "$FAILED" -eq 1 ]; then
+              echo "::warning::First narinfo upload failed with HTTP $status for $hash.narinfo"
+            fi
           fi
         done
 
@@ -88,6 +91,9 @@ runs:
             NAR_UPLOADED=$((NAR_UPLOADED + 1))
           else
             NAR_FAILED=$((NAR_FAILED + 1))
+            if [ "$NAR_FAILED" -eq 1 ]; then
+              echo "::warning::First NAR upload failed with HTTP $status for $name"
+            fi
           fi
         done
 
@@ -96,4 +102,17 @@ runs:
 
         if [ "$FAILED" -gt 0 ] || [ "$NAR_FAILED" -gt 0 ]; then
           echo "::warning::Some uploads failed. Cache may be partially seeded."
+        fi
+
+        # Validate: round-trip a random narinfo to confirm the cache is serving correctly
+        if [ "$UPLOADED" -gt 0 ]; then
+          SAMPLE=$(ls "$PUSH_DIR"/*.narinfo | shuf -n 1 || head -1)
+          SAMPLE_HASH=$(basename "$SAMPLE" .narinfo)
+          FETCHED=$(curl -sf "$CACHE_URL/$SAMPLE_HASH.narinfo" || true)
+          LOCAL=$(cat "$SAMPLE")
+          if [ -n "$FETCHED" ] && [ "$FETCHED" = "$LOCAL" ]; then
+            echo "Validation passed: $SAMPLE_HASH.narinfo round-trips correctly"
+          else
+            echo "::warning::Validation failed: $SAMPLE_HASH.narinfo content mismatch or not retrievable"
+          fi
         fi
