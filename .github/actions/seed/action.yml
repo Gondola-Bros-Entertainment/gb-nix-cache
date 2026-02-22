@@ -1,0 +1,99 @@
+name: 'Seed Nova Cache'
+description: 'Push Nix store paths to a nova-cache server for binary caching'
+
+inputs:
+  cache-url:
+    description: 'Base URL of the nova-cache server (e.g. https://cache.novavero.ai)'
+    required: true
+  api-key:
+    description: 'Bearer token for authenticating PUT requests'
+    required: true
+  paths:
+    description: 'Nix store paths to push (space-separated). Defaults to all paths from the current nix-shell.'
+    required: false
+    default: ''
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Collect and push store paths
+      shell: bash
+      env:
+        CACHE_URL: ${{ inputs.cache-url }}
+        CACHE_API_KEY: ${{ inputs.api-key }}
+        STORE_PATHS: ${{ inputs.paths }}
+      run: |
+        set -euo pipefail
+
+        # Resolve store paths: explicit input or derive from shell.nix / default.nix
+        if [ -n "$STORE_PATHS" ]; then
+          PATHS="$STORE_PATHS"
+        elif [ -f shell.nix ] || [ -f default.nix ]; then
+          PATHS=$(nix-store -qR $(nix-instantiate shell.nix 2>/dev/null || nix-instantiate default.nix 2>/dev/null) 2>/dev/null || true)
+        else
+          echo "::warning::No store paths provided and no shell.nix/default.nix found. Nothing to seed."
+          exit 0
+        fi
+
+        if [ -z "$PATHS" ]; then
+          echo "::warning::No store paths resolved. Nothing to seed."
+          exit 0
+        fi
+
+        PATH_COUNT=$(echo "$PATHS" | wc -w | tr -d ' ')
+        echo "Seeding $PATH_COUNT store paths to $CACHE_URL"
+
+        # Export to local binary cache
+        PUSH_DIR=$(mktemp -d)
+        trap "rm -rf $PUSH_DIR" EXIT
+        nix copy --to "file://$PUSH_DIR" $PATHS 2>/dev/null || true
+
+        # Count what we have
+        NARINFO_COUNT=$(ls "$PUSH_DIR"/*.narinfo 2>/dev/null | wc -l | tr -d ' ')
+        NAR_COUNT=$(ls "$PUSH_DIR"/nar/* 2>/dev/null | wc -l | tr -d ' ')
+        echo "Exported $NARINFO_COUNT narinfo + $NAR_COUNT nar files"
+
+        if [ "$NARINFO_COUNT" -eq 0 ]; then
+          echo "::warning::No narinfo files exported. Nothing to push."
+          exit 0
+        fi
+
+        # Upload narinfo files
+        UPLOADED=0
+        FAILED=0
+        for f in "$PUSH_DIR"/*.narinfo; do
+          [ -f "$f" ] || continue
+          hash=$(basename "$f" .narinfo)
+          status=$(curl -s -o /dev/null -w "%{http_code}" -X PUT \
+            -H "Authorization: Bearer $CACHE_API_KEY" \
+            --data-binary @"$f" \
+            "$CACHE_URL/$hash.narinfo") || true
+          if [ "$status" = "200" ] || [ "$status" = "201" ] || [ "$status" = "204" ]; then
+            UPLOADED=$((UPLOADED + 1))
+          else
+            FAILED=$((FAILED + 1))
+          fi
+        done
+
+        # Upload nar files
+        NAR_UPLOADED=0
+        NAR_FAILED=0
+        for f in "$PUSH_DIR"/nar/*; do
+          [ -f "$f" ] || continue
+          name=$(basename "$f")
+          status=$(curl -s -o /dev/null -w "%{http_code}" -T "$f" \
+            -H "Authorization: Bearer $CACHE_API_KEY" \
+            "$CACHE_URL/nar/$name") || true
+          if [ "$status" = "200" ] || [ "$status" = "201" ] || [ "$status" = "204" ]; then
+            NAR_UPLOADED=$((NAR_UPLOADED + 1))
+          else
+            NAR_FAILED=$((NAR_FAILED + 1))
+          fi
+        done
+
+        echo "Narinfo: $UPLOADED uploaded, $FAILED failed"
+        echo "Nar:     $NAR_UPLOADED uploaded, $NAR_FAILED failed"
+
+        if [ "$FAILED" -gt 0 ] || [ "$NAR_FAILED" -gt 0 ]; then
+          echo "::warning::Some uploads failed. Cache may be partially seeded."
+        fi
