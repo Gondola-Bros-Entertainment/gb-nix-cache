@@ -12,3 +12,6 @@
 - xz compression/decompression
 - Filesystem storage backend
 - Optional WAI cache server (behind `server` flag)
+- Path traversal protection on all store operations
+- Total port parsing (no partial `read`)
+- 54 tests across 8 modules
