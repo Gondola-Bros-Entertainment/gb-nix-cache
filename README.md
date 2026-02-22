@@ -304,6 +304,27 @@ Full Haddock documentation is available on [Hackage](https://hackage.haskell.org
 
 ---
 
+## GitHub Action — CI Cache Seeding
+
+A reusable composite action is included for pushing Nix store paths to a nova-cache server from CI:
+
+```yaml
+- uses: Novavero-AI/nova-cache/.github/actions/seed@main
+  with:
+    cache-url: https://cache.example.com
+    api-key: ${{ secrets.CACHE_API_KEY }}
+```
+
+| Input | Required | Description |
+|-------|----------|-------------|
+| `cache-url` | yes | Base URL of the nova-cache server |
+| `api-key` | yes | Bearer token for authenticating uploads |
+| `paths` | no | Explicit store paths (space-separated). Defaults to all paths from `shell.nix` / `default.nix` |
+
+The action resolves Nix store path closures, exports them to a local binary cache, and uploads all narinfo + NAR files to the server. Works with any CI that has Nix installed.
+
+---
+
 ## Build & Test
 
 ```bash
