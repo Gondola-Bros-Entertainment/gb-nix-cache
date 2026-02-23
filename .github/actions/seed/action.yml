@@ -108,7 +108,7 @@ runs:
         # is storing, signing, and serving correctly.  The server appends its own
         # Ed25519 signature on upload, so we compare fields rather than raw bytes.
         if [ "$UPLOADED" -gt 0 ]; then
-          SAMPLE=$(ls "$PUSH_DIR"/*.narinfo | shuf -n 1 || head -1)
+          SAMPLE=$(ls "$PUSH_DIR"/*.narinfo | head -1)
           SAMPLE_HASH=$(basename "$SAMPLE" .narinfo)
           FETCHED=$(curl -sf "$CACHE_URL/$SAMPLE_HASH.narinfo" || true)
 
