@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.3.0 — 2026-02-23
+
+- Drop `unix` dependency — `checkExecutable` now uses cross-platform
+  `System.Directory.getPermissions` instead of `System.Posix.Files`
+- Fixes Windows build (the `unix` package is not available on Windows)
+- No API changes
+
 ## 0.2.2.0 — 2026-02-23
 
 - Gate `NovaCache.Compression` and `lzma` dependency behind a `compression`
