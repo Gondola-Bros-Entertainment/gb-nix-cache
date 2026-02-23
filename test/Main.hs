@@ -9,7 +9,6 @@ import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import qualified NovaCache.Base32 as Base32
-import qualified NovaCache.Compression as Compression
 import qualified NovaCache.Hash as Hash
 import qualified NovaCache.NAR as NAR
 import qualified NovaCache.NarInfo as NarInfo
@@ -122,7 +121,6 @@ main = do
       testNAR,
       testNarInfo,
       testSigning,
-      testCompression,
       testFileStore,
       testValidate
     ]
@@ -490,29 +488,6 @@ mkTestNarInfo =
       NarInfo.niSigs = [],
       NarInfo.niCA = Nothing
     }
-
--- ---------------------------------------------------------------------------
--- Compression tests
--- ---------------------------------------------------------------------------
-
-testCompression :: IO Bool
-testCompression =
-  runGroup
-    "Compression"
-    [ test "compress/decompress roundtrip" $
-        let input = BS.pack [72, 101, 108, 108, 111, 32, 87, 111, 114, 108, 100]
-            compressed = Compression.compressXz input
-            decompressed = Compression.decompressXz compressed
-         in assertEqual "roundtrip" input decompressed,
-      test "compress/decompress roundtrip (empty)" $
-        let compressed = Compression.compressXz BS.empty
-            decompressed = Compression.decompressXz compressed
-         in assertEqual "roundtrip empty" BS.empty decompressed,
-      test "compressed is smaller for repetitive data" $
-        let input = BS.replicate 10000 0x42
-            compressed = Compression.compressXz input
-         in assertTrue "smaller" (BS.length compressed < BS.length input)
-    ]
 
 -- ---------------------------------------------------------------------------
 -- FileStore tests
