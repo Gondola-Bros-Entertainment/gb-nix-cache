@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.2.0 — 2026-02-23
+
+- Gate `NovaCache.Compression` and `lzma` dependency behind a `compression`
+  cabal flag (default on, backwards compatible)
+- Consumers that only need hashing/NAR/narinfo can build with `-compression`
+  to avoid the system `liblzma` C dependency
+- Compression tests moved to separate test suite (`nova-cache-compression-test`)
+- No changes to any library source modules
+
 ## 0.2.1.0 — 2026-02-22
 
 - Server: `validateNarInfo` wired into PUT handler — rejects malformed uploads

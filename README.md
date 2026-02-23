@@ -25,7 +25,7 @@ A focused, minimal library implementing the full Nix binary cache protocol:
 - **NAR** — Binary serialization and deserialization of the Nix ARchive format using `Builder` monoid composition
 - **NarInfo** — Parse and render the key-value narinfo text format
 - **Signing** — Ed25519 fingerprint signing and verification for binary cache trust
-- **Compression** — xz compress/decompress for NAR transport
+- **Compression** — xz compress/decompress for NAR transport (behind `compression` cabal flag, default on)
 - **Store** — Filesystem storage backend for narinfo and NAR files
 - **Validate** — Pure protocol validation: field semantics, content hashes, Ed25519 signatures — all errors collected, not short-circuited
 - **Server** — Optional WAI/Warp HTTP server implementing the cache protocol (behind `server` cabal flag)
@@ -279,13 +279,13 @@ nix build --substituters http://cache.example.com --trusted-public-keys "mykey:b
   └──────────────────────────────────────────┘
                        │
               IO Boundary (thin)
-  ┌──────────────────────────────────────────┐
-  │  Compression    Store    Server (flag)   │
-  └──────────────────────────────────────────┘
+  ┌──────────────────────────────────────────────────────┐
+  │  Compression (flag)    Store    Server (flag)       │
+  └──────────────────────────────────────────────────────┘
 ```
 
-- **9 modules**, 7 pure + 2 at the IO boundary
-- **74 tests**, hand-rolled harness, no framework dependencies
+- **9 modules**, 7 pure + 2 at the IO boundary (Compression optional via flag)
+- **54 core tests + 3 compression tests**, hand-rolled harness, no framework dependencies
 - **Zero partial functions** — total by construction
 - **Strict by default** — bang patterns on all data fields
 
@@ -400,11 +400,18 @@ The action resolves Nix store path closures, exports them to a local binary cach
 ## Build & Test
 
 ```bash
-cabal build                              # Build library
-cabal test                               # Run all tests (74 tests, 9 groups)
+cabal build                              # Build library (compression on by default)
+cabal build -f-compression               # Build without lzma C dependency
+cabal test                               # Run all tests
 cabal build --ghc-options="-Werror"      # Warnings as errors
 cabal build --flag server                # Build with WAI server
 cabal haddock                            # Generate docs
+```
+
+Consumers that only need hashing, NAR, or narinfo can disable the `compression` flag to avoid the system `liblzma` dependency:
+
+```cabal
+constraints: nova-cache -compression
 ```
 
 ---
