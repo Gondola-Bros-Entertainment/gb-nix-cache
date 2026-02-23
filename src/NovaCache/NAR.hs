@@ -35,12 +35,13 @@ import qualified NovaCache.Hash as Hash
 import System.Directory
   ( doesDirectoryExist,
     doesFileExist,
+    executable,
+    getPermissions,
     getSymbolicLinkTarget,
     listDirectory,
     pathIsSymbolicLink,
   )
 import System.FilePath ((</>))
-import qualified System.Posix.Files as Posix
 
 -- ---------------------------------------------------------------------------
 -- Types
@@ -337,8 +338,8 @@ buildRegularFile path = do
       pure (NarRegular isExec contents)
     else pure (NarRegular False BS.empty)
 
--- | Check whether a file has the owner-execute permission set.
+-- | Check whether a file has the executable permission set.
+-- Uses 'System.Directory.getPermissions' which is cross-platform:
+-- checks the user-execute bit on Unix, file extension on Windows.
 checkExecutable :: FilePath -> IO Bool
-checkExecutable path = do
-  status <- Posix.getFileStatus path
-  pure (Posix.fileMode status .&. Posix.ownerExecuteMode /= 0)
+checkExecutable path = executable <$> getPermissions path
