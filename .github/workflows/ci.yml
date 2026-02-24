@@ -47,7 +47,7 @@ jobs:
 
   build:
     name: Build (${{ matrix.name }})
-    needs: [lint, format]
+    needs: [lint, format, cabal-check]
     strategy:
       fail-fast: false
       matrix:
