@@ -8,7 +8,7 @@ description:
   signing, store path handling, content validation — with an optional WAI
   server.
 
-license:            MIT
+license:            BSD-3-Clause
 license-file:       LICENSE
 author:             Devon Tomlin
 maintainer:         devon.tomlin@novavero.ai
