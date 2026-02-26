@@ -2,9 +2,8 @@
 
 ## 0.2.4.0 — 2026-02-25
 
-- New module: `NovaCache.Base64` — base64 encode/decode re-exported for
-  downstream consumers (nova-nix) so they don't need a direct
-  `base64-bytestring` dependency
+- New module: `NovaCache.Base64` — base64 encode/decode re-exported so
+  downstream consumers don't need a direct `base64-bytestring` dependency
 - No changes to existing modules
 
 ## 0.2.3.0 — 2026-02-23

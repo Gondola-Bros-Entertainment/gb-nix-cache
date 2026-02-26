@@ -1,7 +1,7 @@
 -- | Base64 encoding and decoding for the Nix ecosystem.
 --
 -- Thin wrappers over @base64-bytestring@, re-exported so downstream
--- packages (nova-nix) don't need a direct dependency on the same lib.
+-- packages don't need a direct dependency on the same lib.
 module NovaCache.Base64
   ( encode,
     decode,
