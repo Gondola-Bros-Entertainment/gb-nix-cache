@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.4.1 — 2026-02-26
+
+- License changed from MIT to BSD-3-Clause
+
 ## 0.2.4.0 — 2026-02-25
 
 - New module: `NovaCache.Base64` — base64 encode/decode re-exported so
