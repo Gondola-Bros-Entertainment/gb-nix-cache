@@ -1,5 +1,6 @@
 module Main (main) where
 
+import Data.Bifunctor (first)
 import Data.ByteArray (constEq)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL
@@ -104,8 +105,8 @@ main = do
 loadSigningKey :: Maybe FilePath -> IO (Maybe SecretKey)
 loadSigningKey Nothing = pure Nothing
 loadSigningKey (Just path) = do
-  contents <- T.strip . TE.decodeUtf8 <$> BS.readFile path
-  case parseSecretKey contents of
+  raw <- BS.readFile path
+  case TE.decodeUtf8' raw >>= parseSecretKey . T.strip of
     Left err -> do
       putStrLn ("WARNING: failed to load signing key: " ++ err)
       pure Nothing
@@ -151,18 +152,15 @@ app cfg req respond = case (requestMethod req, pathInfo req) of
           case bodyResult of
             Nothing ->
               respond (responseLBS HTTP.status413 textHeaders "request body too large")
-            Just body -> case parseNarInfo (TE.decodeUtf8 body) of
+            Just body -> case decodeAndValidate body of
               Left err ->
-                respond (badRequest (T.pack err))
-              Right ni -> case validateNarInfo ni of
-                Left errs ->
-                  respond (badRequest (T.unlines (map (T.pack . show) errs)))
-                Right _ -> do
-                  signed <- signNarInfo (cfgSigningKey cfg) body
-                  ok <- writeNarInfo (cfgStore cfg) hashKey signed
-                  if ok
-                    then respond (responseLBS HTTP.status200 textHeaders "ok")
-                    else respond (badRequest "invalid path")
+                respond (badRequest err)
+              Right ni -> do
+                signed <- signNarInfo (cfgSigningKey cfg) ni
+                ok <- writeNarInfo (cfgStore cfg) hashKey signed
+                if ok
+                  then respond (responseLBS HTTP.status200 textHeaders "ok")
+                  else respond (badRequest "invalid path")
   -- PUT /nar/<file> (auth required)
   ("PUT", ["nar", fileName]) ->
     requireAuth cfg req respond $ do
@@ -178,6 +176,20 @@ app cfg req respond = case (requestMethod req, pathInfo req) of
   -- Fallback
   _ ->
     respond (responseLBS HTTP.status404 textHeaders "not found")
+
+-- ---------------------------------------------------------------------------
+-- Validation pipeline
+-- ---------------------------------------------------------------------------
+
+-- | Decode a raw narinfo body and validate it in a single pure pipeline.
+--
+-- Composes UTF-8 decoding, narinfo parsing, and field validation. Returns
+-- the validated 'NarInfo' on success, or a user-facing error message.
+decodeAndValidate :: BS.ByteString -> Either Text NarInfo
+decodeAndValidate body = do
+  decoded <- first (const "request body is not valid UTF-8") (TE.decodeUtf8' body)
+  ni <- first T.pack (parseNarInfo decoded)
+  first (T.unlines . map (T.pack . show)) (validateNarInfo ni)
 
 -- ---------------------------------------------------------------------------
 -- Request body limiting
@@ -220,23 +232,23 @@ requireAuth cfg req respond action = case cfgApiKey cfg of
 -- Signing
 -- ---------------------------------------------------------------------------
 
--- | Sign a narinfo body if a signing key is configured.
+-- | Sign a validated 'NarInfo' if a signing key is configured.
 --
--- Logs a warning to stderr if parsing or signing fails, then returns the
--- unsigned body so the upload is not rejected.
-signNarInfo :: Maybe SecretKey -> BS.ByteString -> IO BS.ByteString
-signNarInfo Nothing body = pure body
-signNarInfo (Just sk) body = case parseNarInfo (TE.decodeUtf8 body) of
+-- Logs a warning to stderr if signing fails, then returns the unsigned
+-- rendering so the upload is not rejected.
+signNarInfo :: Maybe SecretKey -> NarInfo -> IO BS.ByteString
+signNarInfo Nothing ni = pure (renderNarInfoBytes ni)
+signNarInfo (Just sk) ni = case sign sk ni of
   Left err -> do
-    hPutStrLn stderr ("WARNING: signNarInfo: parseNarInfo failed: " ++ err)
-    pure body
-  Right ni -> case sign sk ni of
-    Left err -> do
-      hPutStrLn stderr ("WARNING: signNarInfo: sign failed: " ++ err)
-      pure body
-    Right sig ->
-      let signed = ni {niSigs = niSigs ni ++ [sig]}
-       in pure (TE.encodeUtf8 (renderNarInfo signed))
+    hPutStrLn stderr ("WARNING: signNarInfo: sign failed: " ++ err)
+    pure (renderNarInfoBytes ni)
+  Right sig ->
+    let signed = ni {niSigs = niSigs ni ++ [sig]}
+     in pure (renderNarInfoBytes signed)
+
+-- | Render a 'NarInfo' to its UTF-8 encoded wire format.
+renderNarInfoBytes :: NarInfo -> BS.ByteString
+renderNarInfoBytes = TE.encodeUtf8 . renderNarInfo
 
 -- ---------------------------------------------------------------------------
 -- Response helpers
