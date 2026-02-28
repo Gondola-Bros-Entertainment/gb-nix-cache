@@ -121,7 +121,7 @@ jobs:
           mkdir -p ~/.ssh
           echo "$OCI_SSH_KEY" > ~/.ssh/oci_key
           chmod 600 ~/.ssh/oci_key
-          ssh-keyscan -H "$OCI_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          echo "${{ secrets.OCI_HOST_KEY }}" >> ~/.ssh/known_hosts
 
           ssh -i ~/.ssh/oci_key "ubuntu@${OCI_HOST}" "\
             source ~/.ghcup/env && \
