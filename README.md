@@ -405,7 +405,7 @@ A reusable composite action is included for pushing Nix store paths to a nova-ca
 | `paths` | no | Explicit store paths (space-separated). Defaults to all paths from `shell.nix` / `default.nix` |
 | `parallel` | no | Max concurrent uploads (default: 32) |
 
-The action resolves Nix store path closures, exports them to a local binary cache, and uploads all narinfo + NAR files to the server. Works with any CI that has Nix installed.
+The action fetches `GET /narinfo-hashes` to determine which paths are already cached, exports only the missing paths, and uploads narinfo + NAR files in parallel. Falls back to uploading everything if the endpoint is unavailable (servers < 0.3.0.0). Works with any CI that has Nix installed.
 
 ---
 
