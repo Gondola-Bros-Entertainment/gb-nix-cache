@@ -190,7 +190,7 @@ app cfg req respond = case (requestMethod req, pathInfo req) of
 readBodyLimited :: Request -> IO (Maybe BS.ByteString)
 readBodyLimited req = case requestBodyLength req of
   KnownLength len
-    | fromIntegral len > maxBodySize -> pure Nothing
+    | len > fromIntegral maxBodySize -> pure Nothing
   _ -> do
     body <- BL.toStrict <$> strictRequestBody req
     if BS.length body > maxBodySize
