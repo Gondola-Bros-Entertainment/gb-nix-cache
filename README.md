@@ -8,7 +8,7 @@
 [![CI](https://github.com/Novavero-AI/nova-cache/actions/workflows/ci.yml/badge.svg)](https://github.com/Novavero-AI/nova-cache/actions/workflows/ci.yml)
 [![Hackage](https://img.shields.io/hackage/v/nova-cache.svg)](https://hackage.haskell.org/package/nova-cache)
 ![Haskell](https://img.shields.io/badge/haskell-GHC%209.6-purple)
-![License](https://img.shields.io/badge/license-MIT-blue)
+![License](https://img.shields.io/badge/license-BSD--3--Clause-blue)
 
 </p>
 </div>
@@ -222,11 +222,21 @@ Or via environment variables:
 PORT=5000 NIX_CACHE_DIR=./nix-cache nova-cache-server
 ```
 
+### Environment Variables
+
+| Variable | Description |
+|----------|-------------|
+| `PORT` | Server listen port (default: 5000) |
+| `NIX_CACHE_DIR` | Store directory (default: `./nix-cache`) |
+| `CACHE_API_KEY` | Bearer token required for PUT requests. Omit for open writes. |
+| `SIGNING_KEY_FILE` | Path to Ed25519 secret key file for server-side narinfo signing. |
+
 ### Endpoints
 
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET` | `/nix-cache-info` | Cache metadata (StoreDir, WantMassQuery, Priority) |
+| `GET` | `/narinfo-hashes` | All cached narinfo hashes (newline-delimited) |
 | `GET` | `/<hash>.narinfo` | Fetch narinfo by store path hash |
 | `GET` | `/nar/<file>` | Fetch compressed NAR file |
 | `PUT` | `/<hash>.narinfo` | Upload narinfo |
@@ -358,18 +368,19 @@ validateFull     :: PublicKey -> NarInfo -> ByteString -> ByteString -> Either [
 
 ```haskell
 compressXz   :: ByteString -> ByteString
-decompressXz :: ByteString -> ByteString
+decompressXz :: ByteString -> IO (Either String ByteString)
 ```
 
 ### Store
 
 ```haskell
-newFileStore  :: FilePath -> IO FileStore
-readNarInfo   :: FileStore -> Text -> IO (Maybe ByteString)
-writeNarInfo  :: FileStore -> Text -> ByteString -> IO ()
-readNar       :: FileStore -> Text -> IO (Maybe ByteString)
-writeNar      :: FileStore -> Text -> ByteString -> IO ()
-getCacheInfo  :: FileStore -> (Text, Bool, Int)
+newFileStore      :: FilePath -> IO FileStore
+readNarInfo       :: FileStore -> Text -> IO (Maybe ByteString)
+writeNarInfo      :: FileStore -> Text -> ByteString -> IO Bool
+readNar           :: FileStore -> Text -> IO (Maybe ByteString)
+writeNar          :: FileStore -> Text -> ByteString -> IO Bool
+listNarInfoHashes :: FileStore -> IO [Text]
+getCacheInfo      :: FileStore -> (Text, Bool, Int)
 ```
 
 Full Haddock documentation is available on [Hackage](https://hackage.haskell.org/package/nova-cache).
@@ -392,6 +403,7 @@ A reusable composite action is included for pushing Nix store paths to a nova-ca
 | `cache-url` | yes | Base URL of the nova-cache server |
 | `api-key` | yes | Bearer token for authenticating uploads |
 | `paths` | no | Explicit store paths (space-separated). Defaults to all paths from `shell.nix` / `default.nix` |
+| `parallel` | no | Max concurrent uploads (default: 32) |
 
 The action resolves Nix store path closures, exports them to a local binary cache, and uploads all narinfo + NAR files to the server. Works with any CI that has Nix installed.
 
@@ -417,5 +429,5 @@ constraints: nova-cache -compression
 ---
 
 <p align="center">
-  <sub>MIT License · <a href="https://github.com/Novavero-AI">Novavero AI</a></sub>
+  <sub>BSD-3-Clause · <a href="https://github.com/Novavero-AI">Novavero AI</a></sub>
 </p>

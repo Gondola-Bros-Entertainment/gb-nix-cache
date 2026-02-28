@@ -46,30 +46,30 @@ runs:
         fi
 
         # Convert store paths to narinfo hashes (the 32-char prefix of each path)
-        HASHES=""
+        WORK=$(mktemp -d)
+        trap "rm -rf $WORK" EXIT
+
         for p in $PATHS; do
           name=$(basename "$p")
           hash="${name%%-*}"
-          HASHES="$HASHES $hash"
-        done
-        TOTAL=$(echo "$HASHES" | wc -w | tr -d ' ')
+          echo "$hash"
+        done | sort -u > "$WORK/local-hashes.txt"
+
+        TOTAL=$(wc -l < "$WORK/local-hashes.txt" | tr -d ' ')
         echo "Resolved $TOTAL store paths"
 
-        # --- Find which paths are missing from cache (HEAD check only, no export) ---
-        WORK=$(mktemp -d)
-        trap "rm -rf $WORK" EXIT
-        mkdir -p "$WORK/missing"
+        # --- Fetch cached hashes in a single request ---
+        if curl -sf "$CACHE_URL/narinfo-hashes" -o "$WORK/remote-hashes.txt" 2>/dev/null; then
+          sort -u "$WORK/remote-hashes.txt" > "$WORK/remote-sorted.txt"
+        else
+          # Endpoint unavailable (older server) — treat as empty cache
+          touch "$WORK/remote-sorted.txt"
+        fi
 
-        echo "$HASHES" | tr ' ' '\n' | grep -v '^$' | \
-          xargs -P "$PARALLEL" -I{} sh -c '
-            code=$(curl -s -o /dev/null -w "%{http_code}" --head "$1/{}.narinfo") || true
-            if [ "$code" != "200" ]; then
-              touch "$2/missing/{}"
-            fi
-            exit 0
-          ' _ "$CACHE_URL" "$WORK"
+        # --- Diff: find hashes present locally but not in the remote cache ---
+        comm -23 "$WORK/local-hashes.txt" "$WORK/remote-sorted.txt" > "$WORK/missing-hashes.txt"
 
-        MISSING=$(find "$WORK/missing" -type f | wc -l | tr -d ' ')
+        MISSING=$(wc -l < "$WORK/missing-hashes.txt" | tr -d ' ')
         echo "Already cached: $((TOTAL - MISSING)), to upload: $MISSING"
 
         if [ "$MISSING" -eq 0 ]; then
@@ -82,7 +82,7 @@ runs:
         for p in $PATHS; do
           name=$(basename "$p")
           hash="${name%%-*}"
-          if [ -f "$WORK/missing/$hash" ]; then
+          if grep -qxF "$hash" "$WORK/missing-hashes.txt"; then
             MISSING_PATHS="$MISSING_PATHS $p"
           fi
         done

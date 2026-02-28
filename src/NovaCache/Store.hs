@@ -13,6 +13,7 @@ module NovaCache.Store
     writeNarInfo,
     readNar,
     writeNar,
+    listNarInfoHashes,
     getCacheInfo,
     sanitizePath,
   )
@@ -25,6 +26,7 @@ import qualified Data.Text as T
 import System.Directory
   ( createDirectoryIfMissing,
     doesFileExist,
+    listDirectory,
   )
 import System.FilePath ((</>))
 
@@ -94,11 +96,11 @@ readNarInfo fs hashKey = case sanitizePath hashKey of
 
 -- | Write a narinfo by its store path hash.
 --
--- Silently rejects path components containing traversal sequences.
-writeNarInfo :: FileStore -> Text -> ByteString -> IO ()
+-- Returns 'False' for path components containing traversal sequences.
+writeNarInfo :: FileStore -> Text -> ByteString -> IO Bool
 writeNarInfo fs hashKey body = case sanitizePath hashKey of
-  Nothing -> pure ()
-  Just safe -> BS.writeFile (fsRoot fs </> narinfoSubdir </> safe) body
+  Nothing -> pure False
+  Just safe -> BS.writeFile (fsRoot fs </> narinfoSubdir </> safe) body >> pure True
 
 -- ---------------------------------------------------------------------------
 -- NAR operations
@@ -114,11 +116,21 @@ readNar fs fileName = case sanitizePath fileName of
 
 -- | Write a NAR file by its filename.
 --
--- Silently rejects path components containing traversal sequences.
-writeNar :: FileStore -> Text -> ByteString -> IO ()
+-- Returns 'False' for path components containing traversal sequences.
+writeNar :: FileStore -> Text -> ByteString -> IO Bool
 writeNar fs fileName body = case sanitizePath fileName of
-  Nothing -> pure ()
-  Just safe -> BS.writeFile (fsRoot fs </> narSubdir </> safe) body
+  Nothing -> pure False
+  Just safe -> BS.writeFile (fsRoot fs </> narSubdir </> safe) body >> pure True
+
+-- ---------------------------------------------------------------------------
+-- Listing
+-- ---------------------------------------------------------------------------
+
+-- | List all narinfo hashes currently stored.
+--
+-- Returns the filenames in the @narinfo/@ subdirectory as 'Text' values.
+listNarInfoHashes :: FileStore -> IO [Text]
+listNarInfoHashes fs = map T.pack <$> listDirectory (fsRoot fs </> narinfoSubdir)
 
 -- ---------------------------------------------------------------------------
 -- Cache metadata

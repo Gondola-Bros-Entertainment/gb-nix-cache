@@ -1,5 +1,46 @@
 # Changelog
 
+## 0.3.0.0 — 2026-02-28
+
+### Breaking changes
+
+- **`decompressXz`** signature changed from `ByteString -> ByteString` to
+  `ByteString -> IO (Either String ByteString)` — catches lzma exceptions
+  instead of crashing on malformed input
+- **`writeNarInfo`** / **`writeNar`** now return `IO Bool` instead of `IO ()` —
+  `False` indicates a rejected path (traversal, empty)
+
+### Security
+
+- **Request body size limit** — PUT endpoints reject bodies over 100 MB with
+  413 Payload Too Large (prevents memory exhaustion)
+- **Constant-time auth comparison** — API key check uses `constEq` from
+  `Data.ByteArray` instead of `==` (prevents timing side-channel)
+
+### Bug fixes
+
+- **Safe UTF-8 decoding in NAR deserializer** — `decodeUtf8` replaced with
+  `decodeUtf8'`; malformed UTF-8 in symlink targets or directory entry names
+  now returns a parse error instead of throwing
+
+### New features
+
+- **`GET /narinfo-hashes`** endpoint — returns all cached narinfo hashes as
+  newline-delimited text, enabling efficient cache diffing
+- **`listNarInfoHashes`** function added to `NovaCache.Store`
+
+### Improvements
+
+- Server logs warnings to stderr when narinfo signing fails (parse error or
+  sign error) instead of silently returning unsigned body
+- Server returns 400 Bad Request when PUT paths fail sanitization instead of
+  silently discarding the upload
+- README: license badge and footer corrected from MIT to BSD-3-Clause
+- README: `parallel` input documented in seed action table
+- README: `CACHE_API_KEY` and `SIGNING_KEY_FILE` env vars documented
+- Seed action: replaced per-path HEAD checks with single `GET /narinfo-hashes`
+  call and local diff for dramatically faster cache seeding
+
 ## 0.2.4.1 — 2026-02-26
 
 - License changed from MIT to BSD-3-Clause

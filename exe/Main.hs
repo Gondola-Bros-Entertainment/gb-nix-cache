@@ -1,5 +1,6 @@
 module Main (main) where
 
+import Data.ByteArray (constEq)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL
 import Data.Maybe (fromMaybe)
@@ -7,13 +8,26 @@ import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import qualified Network.HTTP.Types as HTTP
-import Network.Wai (Application, Request, Response, ResponseReceived, pathInfo, requestHeaders, requestMethod, responseLBS, strictRequestBody)
+import Network.Wai
+  ( Application,
+    Request,
+    RequestBodyLength (..),
+    Response,
+    ResponseReceived,
+    pathInfo,
+    requestBodyLength,
+    requestHeaders,
+    requestMethod,
+    responseLBS,
+    strictRequestBody,
+  )
 import qualified Network.Wai.Handler.Warp as Warp
 import NovaCache.NarInfo (NarInfo (..), parseNarInfo, renderNarInfo)
 import NovaCache.Signing (SecretKey, parseSecretKey, sign)
-import NovaCache.Store (FileStore, getCacheInfo, newFileStore, readNar, readNarInfo, writeNar, writeNarInfo)
+import NovaCache.Store (FileStore, getCacheInfo, listNarInfoHashes, newFileStore, readNar, readNarInfo, writeNar, writeNarInfo)
 import NovaCache.Validate (validateNarInfo)
 import System.Environment (getArgs, lookupEnv)
+import System.IO (hPutStrLn, stderr)
 import Text.Read (readMaybe)
 
 -- ---------------------------------------------------------------------------
@@ -35,6 +49,10 @@ apiKeyEnvVar = "CACHE_API_KEY"
 -- | Environment variable for the signing key file path.
 signingKeyEnvVar :: String
 signingKeyEnvVar = "SIGNING_KEY_FILE"
+
+-- | Maximum allowed request body size (100 MB).
+maxBodySize :: Int
+maxBodySize = 100 * 1024 * 1024
 
 -- ---------------------------------------------------------------------------
 -- Server configuration
@@ -103,6 +121,11 @@ app cfg req respond = case (requestMethod req, pathInfo req) of
   -- GET /nix-cache-info
   ("GET", ["nix-cache-info"]) ->
     respond (responseLBS HTTP.status200 textHeaders (BL.fromStrict (renderCacheInfo (cfgStore cfg))))
+  -- GET /narinfo-hashes
+  ("GET", ["narinfo-hashes"]) -> do
+    hashes <- listNarInfoHashes (cfgStore cfg)
+    let body = TE.encodeUtf8 (T.unlines hashes)
+    respond (responseLBS HTTP.status200 textHeaders (BL.fromStrict body))
   -- GET /<hash>.narinfo
   ("GET", [hashNarinfo])
     | Just hashKey <- T.stripSuffix ".narinfo" hashNarinfo -> do
@@ -124,26 +147,55 @@ app cfg req respond = case (requestMethod req, pathInfo req) of
   ("PUT", [hashNarinfo])
     | Just hashKey <- T.stripSuffix ".narinfo" hashNarinfo ->
         requireAuth cfg req respond $ do
-          body <- BL.toStrict <$> strictRequestBody req
-          case parseNarInfo (TE.decodeUtf8 body) of
-            Left err ->
-              respond (badRequest (T.pack err))
-            Right ni -> case validateNarInfo ni of
-              Left errs ->
-                respond (badRequest (T.unlines (map (T.pack . show) errs)))
-              Right _ -> do
-                let signed = signNarInfo (cfgSigningKey cfg) body
-                writeNarInfo (cfgStore cfg) hashKey signed
-                respond (responseLBS HTTP.status200 textHeaders "ok")
+          bodyResult <- readBodyLimited req
+          case bodyResult of
+            Nothing ->
+              respond (responseLBS HTTP.status413 textHeaders "request body too large")
+            Just body -> case parseNarInfo (TE.decodeUtf8 body) of
+              Left err ->
+                respond (badRequest (T.pack err))
+              Right ni -> case validateNarInfo ni of
+                Left errs ->
+                  respond (badRequest (T.unlines (map (T.pack . show) errs)))
+                Right _ -> do
+                  signed <- signNarInfo (cfgSigningKey cfg) body
+                  ok <- writeNarInfo (cfgStore cfg) hashKey signed
+                  if ok
+                    then respond (responseLBS HTTP.status200 textHeaders "ok")
+                    else respond (badRequest "invalid path")
   -- PUT /nar/<file> (auth required)
   ("PUT", ["nar", fileName]) ->
     requireAuth cfg req respond $ do
-      body <- BL.toStrict <$> strictRequestBody req
-      writeNar (cfgStore cfg) fileName body
-      respond (responseLBS HTTP.status200 textHeaders "ok")
+      bodyResult <- readBodyLimited req
+      case bodyResult of
+        Nothing ->
+          respond (responseLBS HTTP.status413 textHeaders "request body too large")
+        Just body -> do
+          ok <- writeNar (cfgStore cfg) fileName body
+          if ok
+            then respond (responseLBS HTTP.status200 textHeaders "ok")
+            else respond (badRequest "invalid path")
   -- Fallback
   _ ->
     respond (responseLBS HTTP.status404 textHeaders "not found")
+
+-- ---------------------------------------------------------------------------
+-- Request body limiting
+-- ---------------------------------------------------------------------------
+
+-- | Read the request body, rejecting payloads over 'maxBodySize'.
+--
+-- Returns 'Nothing' if the declared @Content-Length@ exceeds the limit.
+-- For chunked transfers the body is read and checked after the fact.
+readBodyLimited :: Request -> IO (Maybe BS.ByteString)
+readBodyLimited req = case requestBodyLength req of
+  KnownLength len
+    | fromIntegral len > maxBodySize -> pure Nothing
+  _ -> do
+    body <- BL.toStrict <$> strictRequestBody req
+    if BS.length body > maxBodySize
+      then pure Nothing
+      else pure (Just body)
 
 -- ---------------------------------------------------------------------------
 -- Auth
@@ -153,12 +205,14 @@ app cfg req respond = case (requestMethod req, pathInfo req) of
 --
 -- If no key is configured, all writes are permitted (open mode).
 -- Otherwise the request must carry @Authorization: Bearer \<key\>@.
+-- Uses constant-time comparison to prevent timing attacks.
 requireAuth :: Config -> Request -> (Response -> IO ResponseReceived) -> IO ResponseReceived -> IO ResponseReceived
 requireAuth cfg req respond action = case cfgApiKey cfg of
   Nothing -> action
   Just expected ->
     let provided = lookup HTTP.hAuthorization (requestHeaders req)
-     in if provided == Just ("Bearer " <> expected)
+        expectedHeader = "Bearer " <> expected
+     in if maybe False (constEq expectedHeader) provided
           then action
           else respond (responseLBS HTTP.status401 textHeaders "unauthorized")
 
@@ -167,15 +221,22 @@ requireAuth cfg req respond action = case cfgApiKey cfg of
 -- ---------------------------------------------------------------------------
 
 -- | Sign a narinfo body if a signing key is configured.
-signNarInfo :: Maybe SecretKey -> BS.ByteString -> BS.ByteString
-signNarInfo Nothing body = body
+--
+-- Logs a warning to stderr if parsing or signing fails, then returns the
+-- unsigned body so the upload is not rejected.
+signNarInfo :: Maybe SecretKey -> BS.ByteString -> IO BS.ByteString
+signNarInfo Nothing body = pure body
 signNarInfo (Just sk) body = case parseNarInfo (TE.decodeUtf8 body) of
-  Left _ -> body
+  Left err -> do
+    hPutStrLn stderr ("WARNING: signNarInfo: parseNarInfo failed: " ++ err)
+    pure body
   Right ni -> case sign sk ni of
-    Left _ -> body
+    Left err -> do
+      hPutStrLn stderr ("WARNING: signNarInfo: sign failed: " ++ err)
+      pure body
     Right sig ->
       let signed = ni {niSigs = niSigs ni ++ [sig]}
-       in TE.encodeUtf8 (renderNarInfo signed)
+       in pure (TE.encodeUtf8 (renderNarInfo signed))
 
 -- ---------------------------------------------------------------------------
 -- Response helpers

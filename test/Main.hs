@@ -5,6 +5,7 @@ import Data.ByteArray (convert)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Base64 as B64
+import Data.List (sort)
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
@@ -502,19 +503,23 @@ testFileStore =
         store <- Store.newFileStore tmpDir
         let hashKey = "testhash123"
             content = TE.encodeUtf8 ("StorePath: /nix/store/test\n" :: Text)
-        Store.writeNarInfo store hashKey content
+        wOk <- Store.writeNarInfo store hashKey content
         result <- Store.readNarInfo store hashKey
         removeDirectoryRecursive tmpDir
-        assertEqual "narinfo roundtrip" (Just content) result,
+        ok1 <- assertTrue "write succeeded" wOk
+        ok2 <- assertEqual "narinfo roundtrip" (Just content) result
+        pure (ok1 && ok2),
       test "nar write/read roundtrip" $ do
         tmpDir <- createTestDir
         store <- Store.newFileStore tmpDir
         let fileName = "test.nar.xz"
             content = BS.pack [1, 2, 3, 4, 5]
-        Store.writeNar store fileName content
+        wOk <- Store.writeNar store fileName content
         result <- Store.readNar store fileName
         removeDirectoryRecursive tmpDir
-        assertEqual "nar roundtrip" (Just content) result,
+        ok1 <- assertTrue "write succeeded" wOk
+        ok2 <- assertEqual "nar roundtrip" (Just content) result
+        pure (ok1 && ok2),
       test "read nonexistent returns Nothing" $ do
         tmpDir <- createTestDir
         store <- Store.newFileStore tmpDir
@@ -545,7 +550,34 @@ testFileStore =
         store <- Store.newFileStore tmpDir
         result <- Store.readNarInfo store "../../etc/passwd"
         removeDirectoryRecursive tmpDir
-        assertEqual "blocked" Nothing result
+        assertEqual "blocked" Nothing result,
+      test "writeNarInfo rejects traversal" $ do
+        tmpDir <- createTestDir
+        store <- Store.newFileStore tmpDir
+        ok <- Store.writeNarInfo store "../../etc/passwd" "bad"
+        removeDirectoryRecursive tmpDir
+        assertFalse "write rejected" ok,
+      test "writeNar rejects traversal" $ do
+        tmpDir <- createTestDir
+        store <- Store.newFileStore tmpDir
+        ok <- Store.writeNar store "../escape.nar" "bad"
+        removeDirectoryRecursive tmpDir
+        assertFalse "write rejected" ok,
+      test "listNarInfoHashes returns stored hashes" $ do
+        tmpDir <- createTestDir
+        store <- Store.newFileStore tmpDir
+        _ <- Store.writeNarInfo store "hash1" "content1"
+        _ <- Store.writeNarInfo store "hash2" "content2"
+        hashes <- Store.listNarInfoHashes store
+        removeDirectoryRecursive tmpDir
+        let sorted = sort hashes
+        assertEqual "listed hashes" ["hash1", "hash2"] sorted,
+      test "listNarInfoHashes empty store" $ do
+        tmpDir <- createTestDir
+        store <- Store.newFileStore tmpDir
+        hashes <- Store.listNarInfoHashes store
+        removeDirectoryRecursive tmpDir
+        assertEqual "empty" [] hashes
     ]
 
 -- ---------------------------------------------------------------------------

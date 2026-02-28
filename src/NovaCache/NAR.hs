@@ -217,7 +217,8 @@ parseSymlink bs = do
   (targetPath, afterPath) <- readStr afterTgt
   (rp, final) <- readStr afterPath
   expect tokRParen rp
-  pure (NarSymlink (TE.decodeUtf8 targetPath), final)
+  symTarget <- decodeUtf8Safe targetPath
+  pure (NarSymlink symTarget, final)
 
 -- | Parse a directory node (zero or more child entries).
 parseDirectory :: NarParser NarEntry
@@ -239,7 +240,8 @@ parseDirectory = go []
           (entry, afterEntry) <- parseNode afterNodeTok
           (rp, afterRp) <- readStr afterEntry
           expect tokRParen rp
-          go ((TE.decodeUtf8 entryName, entry) : acc) afterRp
+          decodedName <- decodeUtf8Safe entryName
+          go ((decodedName, entry) : acc) afterRp
 
 -- ---------------------------------------------------------------------------
 -- Wire primitives
@@ -287,6 +289,12 @@ expect :: ByteString -> ByteString -> Either String ()
 expect expected got
   | got == expected = Right ()
   | otherwise = Left ("expected " ++ show expected ++ ", got " ++ show got)
+
+-- | Decode a UTF-8 bytestring, converting decode failures to parse errors.
+decodeUtf8Safe :: ByteString -> Either String Text
+decodeUtf8Safe bs = case TE.decodeUtf8' bs of
+  Right txt -> Right txt
+  Left err -> Left ("invalid UTF-8 in NAR: " ++ show err)
 
 -- ---------------------------------------------------------------------------
 -- Hashing
