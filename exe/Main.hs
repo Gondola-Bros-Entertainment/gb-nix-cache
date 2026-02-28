@@ -106,7 +106,7 @@ loadSigningKey :: Maybe FilePath -> IO (Maybe SecretKey)
 loadSigningKey Nothing = pure Nothing
 loadSigningKey (Just path) = do
   raw <- BS.readFile path
-  case TE.decodeUtf8' raw >>= parseSecretKey . T.strip of
+  case first show (TE.decodeUtf8' raw) >>= parseSecretKey . T.strip of
     Left err -> do
       putStrLn ("WARNING: failed to load signing key: " ++ err)
       pure Nothing
