@@ -129,8 +129,8 @@ jobs:
             git pull && \
             cabal build --flag server --ghc-options='-Wall -Werror' && \
             BINARY=\$(cabal list-bin --flag server nova-cache-server) && \
-            sudo systemctl stop nix-cache.service && \
+            sudo systemctl stop nova-cache.service && \
             sudo cp \"\$BINARY\" /usr/local/bin/nova-cache-server && \
             sudo chmod +x /usr/local/bin/nova-cache-server && \
-            sudo systemctl start nix-cache.service && \
-            sudo systemctl status nix-cache.service --no-pager"
+            sudo systemctl start nova-cache.service && \
+            sudo systemctl status nova-cache.service --no-pager"
