@@ -1,6 +1,6 @@
 cabal-version:      3.0
 name:               nova-cache
-version:            0.3.0.0
+version:            0.3.1.0
 synopsis:           Pure Nix binary cache protocol library
 description:
   A focused, minimal, pure-first library implementing the full Nix binary
@@ -56,7 +56,7 @@ library
     , crypton             >= 1.0 && < 2
     , directory           >= 1.3 && < 1.4
     , filepath            >= 1.4 && < 1.6
-    , memory              >= 0.18 && < 1
+    , ram                 >= 0.20 && < 1
     , text                >= 2.0 && < 2.2
     , vector              >= 0.12 && < 0.14
 
@@ -86,8 +86,9 @@ executable nova-cache-server
   build-depends:
       base                >= 4.16 && < 5
     , bytestring          >= 0.11 && < 0.13
-    , memory              >= 0.18 && < 1
+    , crypton             >= 1.0 && < 2
     , nova-cache
+    , ram                 >= 0.20 && < 1
     , http-types          >= 0.12 && < 0.13
     , text                >= 2.0 && < 2.2
     , wai                 >= 3.2 && < 3.3
@@ -109,7 +110,7 @@ test-suite nova-cache-test
     , crypton             >= 1.0 && < 2
     , directory           >= 1.3 && < 1.4
     , nova-cache
-    , memory              >= 0.18 && < 1
+    , ram                 >= 0.20 && < 1
     , text                >= 2.0 && < 2.2
 
 test-suite nova-cache-compression-test

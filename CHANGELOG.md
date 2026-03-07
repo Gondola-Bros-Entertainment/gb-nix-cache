@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.1.0 — 2026-03-07
+
+### Drop `memory` dependency, use `ram`
+
+- **`memory` → `ram`** — Replaced `memory` package with `ram` (modern, minimal replacement). Same `Data.ByteArray` API, drops the heavy `basement` transitive dependency. Fixes build failure with `crypton >= 1.1` which switched from `memory` to `ram` internally — `Data.ByteArray.ByteArrayAccess` instances were no longer compatible across packages.
+- All imports remain `Data.ByteArray` — no source-level changes needed for downstream consumers.
+
 ## 0.3.0.0 — 2026-02-28
 
 ### Breaking changes
