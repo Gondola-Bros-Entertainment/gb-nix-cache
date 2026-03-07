@@ -127,6 +127,7 @@ jobs:
             source ~/.ghcup/env && \
             cd ~/nova-cache && \
             git pull && \
+            cabal update && \
             cabal clean && \
             cabal build --flag server --ghc-options='-Wall -Werror' && \
             BINARY=\$(cabal list-bin --flag server nova-cache-server) && \
