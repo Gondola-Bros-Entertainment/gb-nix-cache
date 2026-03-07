@@ -5,6 +5,7 @@
 ### Drop `memory` dependency, use `ram`
 
 - **`memory` → `ram`** — Replaced `memory` package with `ram` (modern, minimal replacement). Same `Data.ByteArray` API, drops the heavy `basement` transitive dependency. Fixes build failure with `crypton >= 1.1` which switched from `memory` to `ram` internally — `Data.ByteArray.ByteArrayAccess` instances were no longer compatible across packages.
+- **`crypton >= 1.1` required** — Lower bound bumped from `1.0` to `1.1` so that `crypton` and `nova-cache` both link against `ram` for `ByteArrayAccess` instances. Older `crypton` versions used `memory`, causing instance mismatches at link time.
 - All imports remain `Data.ByteArray` — no source-level changes needed for downstream consumers.
 
 ## 0.3.0.0 — 2026-02-28

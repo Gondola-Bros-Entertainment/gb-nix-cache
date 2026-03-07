@@ -7,7 +7,7 @@
 
 [![CI](https://github.com/Novavero-AI/nova-cache/actions/workflows/ci.yml/badge.svg)](https://github.com/Novavero-AI/nova-cache/actions/workflows/ci.yml)
 [![Hackage](https://img.shields.io/hackage/v/nova-cache.svg)](https://hackage.haskell.org/package/nova-cache)
-![Haskell](https://img.shields.io/badge/haskell-GHC%209.6-purple)
+![Haskell](https://img.shields.io/badge/haskell-GHC%209.8-purple)
 ![License](https://img.shields.io/badge/license-BSD--3--Clause-blue)
 
 </p>
@@ -294,8 +294,8 @@ nix build --substituters http://cache.example.com --trusted-public-keys "mykey:b
   └──────────────────────────────────────────────────────┘
 ```
 
-- **9 modules**, 7 pure + 2 at the IO boundary (Compression optional via flag)
-- **58 core tests + 4 compression tests**, hand-rolled harness, no framework dependencies
+- **10 modules**, 8 pure + 2 at the IO boundary (Compression optional via flag)
+- **74 core tests + 4 compression tests**, hand-rolled harness, no framework dependencies
 - **Zero partial functions** — total by construction
 - **Strict by default** — bang patterns on all data fields
 
